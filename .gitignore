@@ -8,3 +8,9 @@ __pycache__/
 *.pyc
 *.pdf
 profile/
+
+# tooling caches and build artifacts
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
