@@ -1,0 +1,9 @@
+.env
+config.yaml
+data/
+logs/
+.venv/
+__pycache__/
+*.pyc
+*.pdf
+profile/
