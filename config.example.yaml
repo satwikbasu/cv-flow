@@ -1,0 +1,84 @@
+# cv-flow configuration. Copy this to config.yaml and fill in your own values.
+# config.yaml is gitignored, so your secrets stay out of version control.
+
+telegram:
+  bot_token: "PASTE_YOUR_BOT_TOKEN"    # from @BotFather
+  authorized_user_id: 0                # your numeric Telegram user id; the bot ignores everyone else
+
+schedule:
+  daily_discovery_time: "08:00"        # local time the daily digest is sent
+  timezone: "Asia/Kolkata"             # IANA timezone name
+  heartbeat_interval_minutes: 720      # how often the bot posts a short "still running" note
+
+discovery:
+  search_terms: ["devops", "backend", "python", "golang", "software engineer"]
+  locations: ["Remote", "India"]
+  sites: ["linkedin", "indeed", "google", "naukri"]
+  results_wanted_per_site: 25
+  hours_old: 48
+  country_indeed: "india"
+  linkedin_fetch_description: true
+  max_distill_per_cohort: 200          # jobs distilled and ranked per run; higher = more coverage, slower
+  top_n_per_cohort: 5                  # jobs shown per section in the digest
+  reconsider_discovered: false         # keep false in normal use
+  retention_days: 21                   # untailored jobs older than this drop off the backlog (expire)
+
+preferences:
+  yoe_have: 2                          # your years of experience
+  min_ctc_lpa: 7                       # salary floor in lakhs per annum; below this is filtered out
+  top_ctc_lpa: 20                      # the top anchor for the pay score
+  yoe_buffer: 1                        # tolerance above your YOE before the experience gate fires
+  exclude_title_keywords: ["senior", "sr.", "principal", "manager", "director", "vp"]
+  fit_weight: 0.70                     # fit_weight + comp_weight must sum to 1.0
+  comp_weight: 0.30
+  prefer_roles:                        # weight each role family 0.0-1.0; higher surfaces sooner
+    devops: 0.9
+    backend: 0.9
+    sre: 0.8
+    platform: 0.7
+    infra: 0.6
+    fullstack: 0.5
+    data: 0.4
+    security: 0.4
+    network: 0.3
+    sysadmin: 0.3
+    frontend: 0.2
+    other: 0.2
+  exclude_when:                        # deal-breaker rules over the distilled facts
+    - {field: seniority_signal, contains_any: ["senior", "lead"]}
+    - {field: min_years_required, greater_than: 3}
+    - {field: country, equals: "other"}
+    - {field: red_flags, contains_any: ["unpaid", "commission_only", "scam"]}
+
+llm:
+  # Distillation + fit ranking. Mistral's free tier handles the strict JSON-array shape these need.
+  distillation:
+    provider: "mistral"
+    api_key: "PASTE_YOUR_MISTRAL_KEY"
+    base_url: "https://api.mistral.ai/v1"
+    model: "mistral-small-2506"
+    max_requests_per_minute: 60
+  # Resume tailoring. Cerebras gpt-oss-120b: high quality, low volume.
+  tailoring:
+    provider: "cerebras"
+    api_key: "PASTE_YOUR_CEREBRAS_KEY"
+    base_url: "https://api.cerebras.ai/v1"
+    model: "gpt-oss-120b"
+    max_requests_per_minute: 5
+
+resume:
+  master_tex_path: "resume/master.tex"
+  output_dir: "data/resumes"
+  latex_compiler: "tectonic"
+  use_jd_analysis: false               # true re-analyzes each JD before tailoring (one extra LLM call)
+  max_projects: 2                      # most projects a tailored resume will show
+  rephrase: false                      # true lets the model reword bullets (numbers-guarded); false keeps them verbatim
+  # sections:                          # optionally hide whole sections of the resume:
+  #   certifications: false
+
+storage:
+  db_path: "data/cvflow.db"
+  form_fields_path: "profile/form_fields.json"
+
+profile:
+  knowledge_base_dir: "profile"
