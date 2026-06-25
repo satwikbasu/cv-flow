@@ -18,6 +18,7 @@ dependencies = [
     "APScheduler~=3.10",
     "python-jobspy",
     "pycryptodome",
+    "requests",
     "PyYAML",
     "pydantic~=2.0",
 ]
