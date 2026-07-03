@@ -131,7 +131,11 @@ class ApplicationStore:
     def __init__(self, db_path: str | Path) -> None:
         if str(db_path) != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(db_path))
+        # One store is shared between the bot's event loop and the executor threads
+        # that run discovery/tailoring. CPython's sqlite3 ships in serialized mode
+        # (threadsafety 3), so a single connection is safe across threads; the bot's
+        # per-verb locks keep the heavy writers from interleaving anyway.
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._migrate()
