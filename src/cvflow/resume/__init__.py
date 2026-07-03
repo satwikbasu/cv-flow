@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -27,6 +29,7 @@ __all__ = [
     "TailoringPlan",
     "ResumeTailor",
     "TailoringError",
+    "CompileError",
     "MAX_PROJECTS",
 ]
 
@@ -134,6 +137,10 @@ def _numbers(text: str) -> set[str]:
 
 class TailoringError(Exception):
     """Raised when a tailoring plan is invalid or would add facts."""
+
+
+class CompileError(Exception):
+    """Raised when LaTeX compilation fails."""
 
 
 class _Provider(Protocol):
@@ -375,3 +382,90 @@ class ResumeTailor:
             else "No bullets reworded — every line is verbatim from your master resume."
         )
         return "\n".join(lines)
+
+    def tailored_document(self, plan: TailoringPlan) -> str:
+        """Return a full compilable .tex: preamble + the name/contact heading + reordered
+        body inputs. The heading (between ``\\begin{document}`` and the first section input)
+        is always kept, whatever sections the plan selects."""
+        master_tex = (self._master.root / "master.tex").read_text()
+        marker = "\\begin{document}"
+        begin = master_tex.index(marker)
+        preamble = master_tex[:begin]
+        after_begin = master_tex[begin + len(marker) :]
+        first_input = _INPUT_RE.search(after_begin)
+        heading = after_begin[: first_input.start()].strip("\n") if first_input else ""
+        body_lines: list[str] = []
+        if heading:
+            body_lines.append(heading)
+        by_id = {p.project_id: p for p in self._master.projects}
+        for name in plan.section_order:
+            if name == "projects":
+                # These wrapper lines carry NO \resumeItem and are not seen by render()/the
+                # fact check — keep it that way (never put bullet content here, only structure).
+                body_lines.append("\\section{Projects}")
+                body_lines.append("    \\resumeSubHeadingListStart")
+                for pid in plan.selected_project_ids:
+                    proj = by_id.get(pid)
+                    if proj is not None:
+                        body_lines.append(_substitute_bullets(proj.content, plan.rephrased))
+                body_lines.append("    \\resumeSubHeadingListEnd")
+            elif name == "experience":
+                body_lines.append(
+                    _substitute_bullets(self._master.sections["experience"].content, plan.rephrased)
+                )
+            else:
+                body_lines.append(f"\\input{{sections/{name}.tex}}")
+        body = "\n".join(body_lines)
+        return f"{preamble}\\begin{{document}}\n{body}\n\\end{{document}}\n"
+
+    def compile_tailored(
+        self, plan: TailoringPlan, outdir: str | Path, *, stem: str = "_tailored"
+    ) -> Path:
+        """Write the tailored document into the resume root and tectonic-compile it.
+
+        ``stem`` names the output (``<stem>.pdf``) so per-job resumes don't overwrite each
+        other; callers pass a job-derived stem.
+        """
+        if shutil.which("tectonic") is None:
+            raise CompileError("tectonic not found on PATH")
+        self.assert_no_new_facts(self.render(plan))
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        tailored_path = self._master.root / f"{stem}.tex"
+        tailored_path.write_text(self.tailored_document(plan))
+        try:
+            result = subprocess.run(  # noqa: S603 (fixed arg list, no shell)
+                ["tectonic", "-X", "compile", str(tailored_path), "--outdir", str(outdir)],  # noqa: S607 (tectonic comes from PATH by design)
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise CompileError(result.stderr[-2000:])
+            return outdir / f"{stem}.pdf"
+        finally:
+            tailored_path.unlink(missing_ok=True)
+
+    def compile_master(self, outdir: str | Path) -> Path:
+        """Compile ``master.tex`` as-is to a PDF in ``outdir`` (tectonic)."""
+        if shutil.which("tectonic") is None:
+            raise CompileError("tectonic not found on PATH")
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(  # noqa: S603 (fixed arg list, no shell)
+            [  # noqa: S607 (tectonic comes from PATH by design)
+                "tectonic",
+                "-X",
+                "compile",
+                str(self._master.root / "master.tex"),
+                "--outdir",
+                str(outdir),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise CompileError(result.stderr[-2000:])
+        pdf = outdir / "master.pdf"
+        if not pdf.exists():
+            raise CompileError(f"tectonic reported success but {pdf} is missing")
+        return pdf
