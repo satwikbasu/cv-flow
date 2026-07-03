@@ -52,7 +52,7 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["jobspy"]
+module = ["jobspy", "apscheduler.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
