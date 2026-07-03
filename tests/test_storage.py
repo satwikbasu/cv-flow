@@ -199,3 +199,25 @@ def test_form_fields(tmp_path) -> None:  # type: ignore[no-untyped-def]
     assert ff.require("full_name") == "Jane"
     with pytest.raises(MissingField):
         ff.require("phone")
+
+
+def test_store_is_usable_from_another_thread(tmp_path) -> None:
+    # The bot shares one store between the event-loop thread (handlers) and the
+    # executor threads that run discovery/tailoring; sqlite must allow that.
+    import threading
+
+    s = ApplicationStore(tmp_path / "db.sqlite")
+    s.add("j", "Acme", "Dev", "https://example.test/j")
+    errors: list[BaseException] = []
+
+    def _use() -> None:
+        try:
+            assert s.get("j") is not None
+            s.set_digest_slots(["j"])
+        except BaseException as exc:  # noqa: BLE001 — capture for the main thread
+            errors.append(exc)
+
+    t = threading.Thread(target=_use)
+    t.start()
+    t.join()
+    assert errors == []
