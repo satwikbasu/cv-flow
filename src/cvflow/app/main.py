@@ -8,6 +8,7 @@ the notifier only reach out when a run actually happens.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -199,8 +200,9 @@ def _frontier_provider(fr: Any) -> ProviderConfig:
 
 
 def main() -> None:  # pragma: no cover — the composition is tested; polling is not
-    config = load_config("config.yaml")
-    services = build_services(config)
+    config_path = os.environ.get("CVFLOW_CONFIG", "config.yaml")
+    config = load_config(config_path)
+    services = build_services(config, config_path=config_path)
 
     async def _start_scheduler(app: Any) -> None:
         build_scheduler(
