@@ -60,3 +60,45 @@ def test_manual_with_reply_builds_manual_backend(tmp_path: Path) -> None:
     )
     kw = calls[0][1]
     assert type(kw["backend"]).__name__ == "BackendChain" and kw["force"] is True
+
+
+def _spy_config(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    import cvflow.app.main as app_main
+    import cvflow.config as config_mod
+    from cvflow.app.commands import Services
+    from cvflow.storage import ApplicationStore
+
+    seen: list[Any] = []
+
+    def fake_load(path: Any) -> str:
+        seen.append(("load", str(path)))
+        return "CFG"
+
+    def fake_build(cfg: Any, config_path: str = "config.yaml") -> Services:
+        seen.append(("build", config_path))
+        return Services(
+            store=ApplicationStore(":memory:"),
+            notify=lambda _m: None,
+            discover=lambda: None,  # type: ignore[arg-type, return-value]
+            tailor=lambda _j: {},
+            authorized_user_id=1,
+        )
+
+    monkeypatch.setattr(config_mod, "load_config", fake_load)
+    monkeypatch.setattr(app_main, "build_services", fake_build)
+    return seen
+
+
+def test_cli_config_flag_selects_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _spy_config(monkeypatch)
+    main(["--config", "alt/x.yaml", "heartbeat"], echo=lambda _m: None)
+    assert seen == [("load", "alt/x.yaml"), ("build", "alt/x.yaml")]
+
+
+def test_cli_config_env_then_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _spy_config(monkeypatch)
+    monkeypatch.setenv("CVFLOW_CONFIG", "alt/env.yaml")
+    main(["heartbeat"], echo=lambda _m: None)
+    monkeypatch.delenv("CVFLOW_CONFIG")
+    main(["heartbeat"], echo=lambda _m: None)
+    assert [s[1] for s in seen if s[0] == "load"] == ["alt/env.yaml", "config.yaml"]

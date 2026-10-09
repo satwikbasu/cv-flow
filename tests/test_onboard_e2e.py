@@ -160,3 +160,47 @@ async def test_wrong_document_type_rejected(tmp_path: Path) -> None:
     await on_document(up, ctx)
     assert "PDF, DOCX or TXT" in _replies(up)
     assert ctx.bot_data["onboard"]["files"] == []
+
+
+class _ManualRunner(_FakeRunner):
+    def __init__(self, tmp: Path, pdf: Path) -> None:
+        super().__init__(tmp, pdf)
+        self.manual = True
+        self.manual_calls: list[tuple[list[Path], dict[str, str], bool, str]] = []
+
+    def build_prompt(self, files: list[Path], facts: dict[str, str]) -> str:
+        return "PROMPT-BODY"
+
+    def run_manual(  # type: ignore[override]
+        self, files: list[Path], facts: dict[str, str], force: bool, reply_text: str
+    ) -> OnboardOutcome:
+        self.manual_calls.append((files, facts, force, reply_text))
+        return OnboardOutcome(["manual ok"], self.pdf, False, True)
+
+
+async def test_manual_mode_prompt_doc_then_reply(tmp_path: Path) -> None:
+    pdf = tmp_path / "onboarding.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    runner = _ManualRunner(tmp_path, pdf)
+    ctx = SimpleNamespace(bot_data={"services": _services(runner)})
+    await on_text(_msg("/onboard"), ctx)
+    await on_document(_msg(document=_doc("cv.txt")), ctx)
+    await on_text(_msg("done"), ctx)
+    last = None
+    for answer in ["1", "2", "3", "skip"]:
+        last = _msg(answer)
+        await on_text(last, ctx)
+    assert last is not None
+    last.effective_message.reply_document.assert_awaited_once()
+    assert last.effective_message.reply_document.await_args.kwargs["filename"] == "prompt.txt"
+    assert ctx.bot_data["onboard"]["phase"] == "awaiting_reply_doc"
+    assert not runner.calls
+
+    reply = _msg(document=_doc("reply.txt", b'{"json": true}'))
+    await on_document(reply, ctx)
+    files, facts, force, text = runner.manual_calls[0]
+    assert [f.name for f in files] == ["cv.txt"] and text == '{"json": true}'
+    assert facts == {"yoe_have": "1", "min_ctc_lpa": "2", "top_ctc_lpa": "3"}
+    assert force is False and "onboard" not in ctx.bot_data
+    assert "manual ok" in _replies(reply)
+    reply.effective_message.reply_document.assert_awaited_once()

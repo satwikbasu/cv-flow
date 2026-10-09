@@ -7,6 +7,7 @@ smoke run) exercises the same code path — just with stdout instead of chat.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -17,6 +18,23 @@ import yaml
 from cvflow.runs import run_heartbeat, run_onboard
 
 _USAGE = "usage: python -m cvflow.cli <discover|tailor <job_id>|heartbeat|onboard <file...>>"
+
+
+def _pop_config(args: list[str]) -> tuple[str, list[str]]:
+    """Split a global ``--config PATH`` out of ``args`` (env ``CVFLOW_CONFIG``, then default)."""
+    path = os.environ.get("CVFLOW_CONFIG", "config.yaml")
+    rest: list[str] = []
+    it = iter(args)
+    for a in it:
+        if a == "--config":
+            path = next(it, "")
+            if not path:
+                raise SystemExit("--config needs a path")
+        elif a.startswith("--config="):
+            path = a.split("=", 1)[1]
+        else:
+            rest.append(a)
+    return path, rest
 
 
 def _onboard(
@@ -112,14 +130,22 @@ def main(
     args = list(argv) if argv is not None else sys.argv[1:]
     if not args:
         raise SystemExit(_USAGE)
+    config_path, args = _pop_config(args)
+    if not args:
+        raise SystemExit(_USAGE)
     if args[0] == "onboard":  # needs no profile/, so it must bypass build_services
-        _onboard(args[1:], backend=onboard_backend, run_onboard_fn=run_onboard_fn, echo=echo)
+        _onboard(
+            args[1:] + ["--config", config_path],
+            backend=onboard_backend,
+            run_onboard_fn=run_onboard_fn,
+            echo=echo,
+        )
         return
     if services is None:  # pragma: no cover — real config path; tests inject services
         from cvflow.app.main import build_services
         from cvflow.config import load_config
 
-        services = build_services(load_config("config.yaml"))
+        services = build_services(load_config(config_path), config_path=config_path)
     from cvflow.app.commands import Services
 
     assert isinstance(services, Services)  # noqa: S101 — narrow the injected type
