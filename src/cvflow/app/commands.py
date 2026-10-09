@@ -28,6 +28,7 @@ from cvflow.statemachine import IllegalTransition, Status
 from cvflow.storage import ApplicationStore
 
 if TYPE_CHECKING:
+    from cvflow.app.main import OnboardRunner
     from cvflow.runs import DiscoverOutcome
 
 __all__ = ["Action", "parse_action", "Services", "on_text", "build_job_keyboard"]
@@ -127,6 +128,8 @@ class Services:
     authorized_user_id: int
     discover_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     tailor_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    onboard: OnboardRunner | None = None
+    onboard_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 _HELP = (
@@ -253,7 +256,23 @@ async def on_text(update: Any, context: Any) -> None:
     if not _authorized(update, services):
         return
     message = update.effective_message
-    if message is None or not message.text:
+    if message is None:
+        return
+    # Lazy import: cvflow.app.onboard imports this module.
+    from cvflow.app.onboard import on_onboard, onboard_text
+
+    active = context.bot_data.get("onboard") is not None
+    if not message.text:
+        await message.reply_text(
+            "Send a document or type cancel." if active else _HINT
+        )
+        return
+    head = message.text.strip().split()[0].lower().split("@")[0] if message.text.strip() else ""
+    if head == "/onboard":
+        await on_onboard(update, context)
+        return
+    if active and not message.text.startswith("/"):
+        await onboard_text(message, context)
         return
     action = parse_action(message.text, services.store.digest_slots())
     if action is None:
