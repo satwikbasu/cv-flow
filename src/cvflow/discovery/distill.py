@@ -32,6 +32,12 @@ class Salary(BaseModel):
     period: Literal["year", "month", "hour", "unknown"]
 
 
+ROLE_FAMILIES: tuple[str, ...] = (
+    "devops", "sre", "platform", "infra", "backend", "fullstack",
+    "frontend", "network", "sysadmin", "data", "security", "other",
+)
+
+
 class Crux(BaseModel):
     job_id: str
     role_family: Literal["devops", "sre", "platform", "infra", "backend", "fullstack",
