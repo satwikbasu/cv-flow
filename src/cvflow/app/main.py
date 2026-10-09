@@ -8,6 +8,7 @@ the notifier only reach out when a run actually happens.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +23,11 @@ from cvflow.discovery.benchmark import build_fingerprint
 from cvflow.discovery.skills import load_skill_profile
 from cvflow.knowledge import KnowledgeBase
 from cvflow.llm import ChatClient
+from cvflow.onboarding.backends import GenerationBackend, auto_chain, manual_chain
+from cvflow.onboarding.parse import parse_resumes
+from cvflow.onboarding.prompt import build_prompt
 from cvflow.resume import ResumeTailor, parse_master
-from cvflow.runs import DiscoverOutcome, run_discover, run_tailor
+from cvflow.runs import DiscoverOutcome, OnboardOutcome, run_discover, run_onboard, run_tailor
 from cvflow.storage import ApplicationStore
 
 __all__ = ["build_services", "main"]
@@ -40,7 +44,57 @@ def _chat_client(cfg: ProviderConfig) -> ChatClient:
     )
 
 
-def build_services(config: Config) -> Services:
+@dataclass(frozen=True)
+class OnboardRunner:
+    """Blocking onboarding bodies closed over config + clients (run in an executor)."""
+
+    config: Config
+    config_path: str
+    tailoring: Any
+    distillation: Any
+    frontier: Any = None
+
+    @property
+    def manual(self) -> bool:
+        return self.config.onboarding.mode == "manual"
+
+    @property
+    def profile_dir(self) -> str:
+        return self.config.profile.knowledge_base_dir
+
+    @property
+    def staging_dir(self) -> str:
+        return self.config.onboarding.staging_dir
+
+    def build_prompt(self, files: list[Path], facts: dict[str, str]) -> str:
+        return build_prompt(parse_resumes(list(files)).text, facts)
+
+    def _run(
+        self, files: list[Path], facts: dict[str, str], force: bool, backend: GenerationBackend
+    ) -> OnboardOutcome:
+        return run_onboard(
+            list(files),
+            backend=backend,
+            repo_root=".",
+            user_facts=facts,
+            config_path=self.config_path,
+            force=force,
+            attempts=self.config.onboarding.max_compile_attempts,
+        )
+
+    def run_auto(self, files: list[Path], facts: dict[str, str], force: bool) -> OnboardOutcome:
+        backend = auto_chain(
+            self.config.onboarding, self.tailoring, self.distillation, self.frontier
+        )
+        return self._run(files, facts, force, backend)
+
+    def run_manual(
+        self, files: list[Path], facts: dict[str, str], force: bool, reply_text: str
+    ) -> OnboardOutcome:
+        return self._run(files, facts, force, manual_chain(lambda _p: None, lambda: reply_text))
+
+
+def build_services(config: Config, config_path: str = "config.yaml") -> Services:
     store = ApplicationStore(config.storage.db_path)
     knowledge = KnowledgeBase.load(
         config.profile.knowledge_base_dir, config.storage.form_fields_path
@@ -121,13 +175,27 @@ def build_services(config: Config) -> Services:
             notify=notify,
         )
 
+    fr = config.onboarding.frontier
+    runner = OnboardRunner(
+        config,
+        config_path,
+        tailoring_client,
+        distiller,
+        _chat_client(_frontier_provider(fr)) if fr is not None else None,
+    )
     return Services(
         store=store,
+        onboard=runner,
         notify=notify,
         discover=_discover,
         tailor=_tailor,
         authorized_user_id=config.telegram.authorized_user_id,
     )
+
+
+def _frontier_provider(fr: Any) -> ProviderConfig:
+    # Frontier config carries no rate limit; 30 RPM is a conservative client-side cap.
+    return ProviderConfig(fr.provider, fr.api_key, fr.base_url, fr.model, 30)
 
 
 def main() -> None:  # pragma: no cover — the composition is tested; polling is not

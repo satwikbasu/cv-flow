@@ -21,6 +21,12 @@ async def on_button(update: Any, context: Any) -> None:
         return
     await query.answer()
     data = query.data or ""
+    if data.startswith("onboard:"):
+        if update.effective_message is not None:
+            from cvflow.app.onboard import onboard_button
+
+            await onboard_button(data.partition(":")[2], update.effective_message, context)
+        return
     verb, _, job_id = data.partition(":")
     if not job_id:
         return

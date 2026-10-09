@@ -15,6 +15,7 @@ from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filt
 
 from cvflow.app.buttons import on_button
 from cvflow.app.commands import Services, on_text
+from cvflow.app.onboard import on_document
 
 __all__ = ["build_application"]
 
@@ -31,5 +32,6 @@ def build_application(
     application = builder.build()
     application.bot_data["services"] = services
     application.add_handler(MessageHandler(filters.TEXT | filters.COMMAND, on_text))
+    application.add_handler(MessageHandler(filters.Document.ALL, on_document))
     application.add_handler(CallbackQueryHandler(on_button))
     return application
