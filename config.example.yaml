@@ -98,3 +98,16 @@ storage:
 
 profile:
   knowledge_base_dir: "profile"
+
+# Optional: automated onboarding (build profile/ and resume/ from your existing resume).
+# onboarding:
+#   mode: auto                         # auto = generate with an LLM; manual = fill profile/ by hand
+#   # Bring-your-own frontier API (leave api_key blank to disable). Any OpenAI-compatible
+#   # endpoint works, e.g. OpenRouter.
+#   frontier:
+#     provider: ""
+#     api_key: ""
+#     base_url: ""
+#     model: ""
+#   max_compile_attempts: 3            # LaTeX compile-and-repair attempts
+#   staging_dir: "data/onboarding"

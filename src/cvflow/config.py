@@ -109,6 +109,24 @@ class ProfileConfig:
 
 
 @dataclass(frozen=True)
+class FrontierConfig:
+    """Optional bring-your-own frontier API (any OpenAI-compatible endpoint) for onboarding."""
+
+    provider: str
+    api_key: str
+    base_url: str
+    model: str
+
+
+@dataclass(frozen=True)
+class OnboardingConfig:
+    mode: str = "auto"
+    frontier: FrontierConfig | None = None
+    max_compile_attempts: int = 3
+    staging_dir: str = "data/onboarding"
+
+
+@dataclass(frozen=True)
 class Config:
     telegram: TelegramConfig
     schedule: ScheduleConfig
@@ -118,6 +136,7 @@ class Config:
     resume: ResumeConfig
     storage: StorageConfig
     profile: ProfileConfig
+    onboarding: OnboardingConfig = field(default_factory=OnboardingConfig)
 
 
 def _section(data: dict[str, Any], key: str, path: str) -> dict[str, Any]:
@@ -232,6 +251,34 @@ def _provider_config(section: dict[str, Any], path: str) -> ProviderConfig:
     )
 
 
+def _onboarding_config(data: dict[str, Any]) -> OnboardingConfig:
+    if "onboarding" not in data or data["onboarding"] is None:
+        return OnboardingConfig()
+    sec = _section(data, "onboarding", "")
+    mode = _opt_str(sec, "mode", "onboarding.", "auto")
+    if mode not in ("auto", "manual"):
+        raise ConfigError(f"onboarding.mode must be 'auto' or 'manual', got {mode!r}")
+    frontier: FrontierConfig | None = None
+    fr = sec.get("frontier")
+    if fr is not None:
+        if not isinstance(fr, dict):
+            raise ConfigError("section onboarding.frontier must be a mapping")
+        key = fr.get("api_key")
+        if isinstance(key, str) and key.strip():
+            frontier = FrontierConfig(
+                provider=_get_str(fr, "provider", "onboarding.frontier."),
+                api_key=key.strip(),
+                base_url=_get_str(fr, "base_url", "onboarding.frontier."),
+                model=_get_str(fr, "model", "onboarding.frontier."),
+            )
+    return OnboardingConfig(
+        mode=mode,
+        frontier=frontier,
+        max_compile_attempts=_opt_int(sec, "max_compile_attempts", "onboarding.", 3),
+        staging_dir=_opt_str(sec, "staging_dir", "onboarding.", "data/onboarding"),
+    )
+
+
 def load_config(path: str | Path) -> Config:
     """Load, validate, and return the typed config at ``path``.
 
@@ -341,4 +388,5 @@ def load_config(path: str | Path) -> Config:
         profile=ProfileConfig(
             knowledge_base_dir=_get_str(prof, "knowledge_base_dir", "profile."),
         ),
+        onboarding=_onboarding_config(data),
     )
