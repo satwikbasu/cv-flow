@@ -63,3 +63,4 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["."]  # make the repo root importable so cross-test helpers (tests.*) resolve under a bare `pytest`
