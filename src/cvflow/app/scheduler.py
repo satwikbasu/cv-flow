@@ -61,6 +61,8 @@ def build_scheduler(
         CronTrigger(hour=int(hour), minute=int(minute), timezone=schedule.timezone),
         args=[services, bot, chat_id],
         name="daily-discover",
+        misfire_grace_time=3600,  # a restart near cron time must not skip the day's digest
+        coalesce=True,
     )
     sched.add_job(
         scheduled_heartbeat,

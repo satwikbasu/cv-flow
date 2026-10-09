@@ -42,6 +42,14 @@ def test_scheduler_registers_daily_discover_and_heartbeat() -> None:
     assert "1:00:00" in str(jobs["heartbeat"].trigger)  # every 60 minutes
 
 
+def test_daily_discover_tolerates_misfire() -> None:
+    bot = SimpleNamespace(send_message=AsyncMock())
+    sched = build_scheduler(_services(), bot, chat_id=CHAT, schedule=_schedule())
+    daily = {j.name: j for j in sched.get_jobs()}["daily-discover"]
+    assert daily.misfire_grace_time == 3600
+    assert daily.coalesce is True
+
+
 async def test_scheduled_discover_runs_and_offers_buttons() -> None:
     ran: list[str] = []
 
