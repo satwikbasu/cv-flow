@@ -60,7 +60,10 @@ def parse_resume(path: str | Path) -> ParsedResume:
         return ParsedResume(_pdf_text(p), "pdf", [])
     if ext == ".docx":
         return ParsedResume(_docx_text(p), "docx", [])
-    return ParsedResume(p.read_text(), "text", [])
+    text = p.read_text()
+    if not text.strip():
+        raise ResumeParseError(f"{p.name} is empty")
+    return ParsedResume(text, "text", [])
 
 
 def parse_resumes(paths: list[str | Path]) -> ParsedResume:
