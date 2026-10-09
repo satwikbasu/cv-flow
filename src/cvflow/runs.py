@@ -12,15 +12,33 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 from cvflow.analysis import resolve_tailoring_analysis
 from cvflow.digest_summary import summarize_drops, write_discover_log
+from cvflow.knowledge import KnowledgeBase
+from cvflow.llm import LLMError
+from cvflow.onboarding import OnboardingError
+from cvflow.onboarding.applier import apply_bundle
+from cvflow.onboarding.backends import GenerationBackend
+from cvflow.onboarding.compile_repair import CompileOutcome, compile_with_repair
+from cvflow.onboarding.parse import ResumeParseError, parse_resumes
+from cvflow.onboarding.prompt import build_prompt
+from cvflow.onboarding.report import render_report
 from cvflow.render import filtered_footer, format_drop_report, render_digest
+from cvflow.resume import CompileError, ResumeTailor, parse_master
 from cvflow.statemachine import IllegalTransition, Status
 from cvflow.storage import ApplicationStore, UnknownJob
 
-__all__ = ["DiscoverOutcome", "run_discover", "run_tailor", "run_heartbeat"]
+__all__ = [
+    "DiscoverOutcome",
+    "OnboardOutcome",
+    "run_discover",
+    "run_tailor",
+    "run_heartbeat",
+    "run_onboard",
+]
 
 
 @dataclass(frozen=True)
@@ -121,3 +139,69 @@ def run_heartbeat(store: ApplicationStore) -> str:
     """One-line liveness message with per-status counts."""
     counts = ", ".join(f"{s.value}={len(store.list_by_status(s))}" for s in Status)
     return f"💓 cv-flow alive — {counts}"
+
+
+@dataclass(frozen=True)
+class OnboardOutcome:
+    report: list[str]
+    pdf_path: Path | None
+    flagged: bool
+    ok: bool
+
+
+def run_onboard(
+    files: list[str | Path],
+    *,
+    backend: GenerationBackend,
+    repo_root: str | Path,
+    user_facts: dict[str, str],
+    config_path: str | Path = "config.yaml",
+    force: bool = False,
+    attempts: int = 3,
+    notify: Callable[[str], None] = lambda _m: None,
+    compile_repair: Callable[..., CompileOutcome] = compile_with_repair,
+) -> OnboardOutcome:
+    """Résumé files -> generated profile + master résumé on disk -> compiled PDF.
+
+    Nothing is applied unless parsing and generation both succeed, and
+    ``apply_bundle`` leaves the live tree untouched when it fails.
+    """
+    notify("reading resume...")
+    try:
+        parsed = parse_resumes(files)
+    except (ResumeParseError, OSError) as exc:
+        return OnboardOutcome([f"Could not read your resume: {exc}"], None, True, False)
+    prompt = build_prompt(parsed.text, user_facts)
+    notify("generating candidate profile...")
+    try:
+        bundle = backend.generate_bundle(prompt)
+    except (OnboardingError, LLMError) as exc:
+        return OnboardOutcome(
+            [f"Profile generation failed, nothing was written: {exc}"], None, True, False
+        )
+    notify("applying...")
+    try:
+        applied = apply_bundle(bundle, repo_root, config_path=config_path, force=force)
+    except OnboardingError as exc:
+        return OnboardOutcome([f"Could not apply the profile: {exc}"], None, False, False)
+    notify("compiling resume...")
+    outcome = compile_repair(applied.resume_dir, backend, attempts=attempts)
+    kb = KnowledgeBase.load(applied.profile_dir, applied.profile_dir / "form_fields.json")
+    flagged = outcome.flagged
+    pdf_path: Path | None = None
+    extra: list[str] = []
+    if outcome.ok:
+        out_dir = Path(repo_root) / "data" / "resumes"
+        try:
+            tailor = ResumeTailor(cast(Any, None), parse_master(applied.resume_dir))
+            pdf_path = out_dir / "onboarding.pdf"
+            tailor.compile_master(out_dir).replace(pdf_path)
+        except CompileError as exc:
+            pdf_path, flagged = None, True
+            extra.append(f"Resume PDF could not be produced: {exc}")
+    report = render_report(bundle, applied, outcome, kb) + extra
+    if applied.staged_config is not None:
+        report.append(
+            f"Config blocks were staged at {applied.staged_config} (no config.yaml exists yet)."
+        )
+    return OnboardOutcome(report, pdf_path, flagged, ok=not flagged)
