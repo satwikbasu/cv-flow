@@ -126,3 +126,22 @@ def test_no_automation_auth_security(tmp_path: Path) -> None:
 def test_missing_file_raises() -> None:
     with pytest.raises(ConfigError):
         load_config("/no/such/config.yaml")
+
+
+def test_extra_body_parsed_and_validated(tmp_path: Path) -> None:
+    data = _valid()
+    data["llm"]["distillation"]["extra_body"] = {"reasoning_effort": "none"}
+    assert load_config(_write(tmp_path, data)).llm.distillation.extra_body == {
+        "reasoning_effort": "none"
+    }
+    assert load_config(_write(tmp_path, _valid())).llm.tailoring.extra_body == {}
+    data["llm"]["distillation"]["extra_body"] = "x"
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, data))
+
+
+def test_example_config_parses() -> None:
+    cfg = load_config(Path(__file__).parent.parent / "config.example.yaml")
+    assert cfg.llm.distillation.model == "mistral-small-2603"
+    assert cfg.llm.tailoring.provider == "mistral"
+    assert "google" not in cfg.discovery.sites

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
@@ -119,9 +120,13 @@ class Distiller:
 
 
 def distill_all(
-    postings: list[JobPosting], store: Any, distiller: Distiller
+    postings: list[JobPosting],
+    store: Any,
+    distiller: Distiller,
+    on_failure: Callable[[JobPosting, Exception], None] | None = None,
 ) -> list[Crux]:
-    """Cache-aware distillation. One bad JD is logged and skipped, never aborts the run."""
+    """Cache-aware distillation. One bad JD never aborts the run; it is logged and reported
+    to ``on_failure`` so the caller can surface it."""
     out: list[Crux] = []
     total = len(postings)
     for i, p in enumerate(postings, start=1):
@@ -140,6 +145,8 @@ def distill_all(
             crux = distiller.distill(p)
         except Exception as exc:  # noqa: BLE001 — isolate a bad/garbled/over-budget JD
             logger.warning("distill %d/%d %s FAILED: %s", i, total, p.job_id, exc)
+            if on_failure is not None:
+                on_failure(p, exc)
             continue
         store.save_crux(p.job_id, crux.model_dump_json(), version=DISTILL_VERSION)
         logger.info("distill %d/%d %s ok (%.1fs)", i, total, p.job_id, time.monotonic() - t)

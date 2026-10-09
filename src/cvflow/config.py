@@ -8,7 +8,7 @@ or malformed value.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +76,8 @@ class ProviderConfig:
     base_url: str
     model: str
     max_requests_per_minute: int
+    # Arbitrary extra JSON merged into every chat request (e.g. reasoning_effort).
+    extra_body: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -217,12 +219,16 @@ def _get_rule_list(data: dict[str, Any], key: str, path: str) -> list[dict[str, 
 
 
 def _provider_config(section: dict[str, Any], path: str) -> ProviderConfig:
+    extra_body = section.get("extra_body", {})
+    if not isinstance(extra_body, dict):
+        raise ConfigError(f"key {path}extra_body must be a mapping")
     return ProviderConfig(
         provider=_get_str(section, "provider", path),
         api_key=_get_str(section, "api_key", path).strip(),
         base_url=_get_str(section, "base_url", path),
         model=_get_str(section, "model", path),
         max_requests_per_minute=_get_int(section, "max_requests_per_minute", path),
+        extra_body=dict(extra_body),
     )
 
 

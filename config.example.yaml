@@ -13,7 +13,7 @@ schedule:
 discovery:
   search_terms: ["devops", "backend", "python", "golang", "software engineer"]
   locations: ["Remote", "India"]
-  sites: ["linkedin", "indeed", "google", "naukri"]
+  sites: ["linkedin", "indeed", "naukri"]   # supported: linkedin, indeed, naukri (JobSpy dropped Google Jobs)
   results_wanted_per_site: 25
   hours_old: 48
   country_indeed: "india"
@@ -50,21 +50,37 @@ preferences:
     - {field: country, equals: "other"}
     - {field: red_flags, contains_any: ["unpaid", "commission_only", "scam"]}
 
+# Any OpenAI-compatible endpoint works: set base_url / api_key / model to point at Mistral,
+# OpenRouter (https://openrouter.ai/api/v1), Cerebras (https://api.cerebras.ai/v1), or a local
+# server. `provider` is just a label that selects the seed field name
+# (mistral -> random_seed, anything else -> seed).
+# `extra_body` passes arbitrary extra JSON to the chat API (e.g. OpenRouter routing params).
 llm:
   # Distillation + fit ranking. Mistral's free tier handles the strict JSON-array shape these need.
   distillation:
     provider: "mistral"
     api_key: "PASTE_YOUR_MISTRAL_KEY"
     base_url: "https://api.mistral.ai/v1"
-    model: "mistral-small-2506"
+    model: "mistral-small-2603"
     max_requests_per_minute: 60
-  # Resume tailoring. Cerebras gpt-oss-120b: high quality, low volume.
+    # Mistral Small 4 is a reasoning model; this keeps structured JSON output unwrapped.
+    extra_body: {reasoning_effort: "none"}
+  # Resume tailoring. Defaults to Mistral so the zero-cost default needs only one key.
   tailoring:
-    provider: "cerebras"
-    api_key: "PASTE_YOUR_CEREBRAS_KEY"
-    base_url: "https://api.cerebras.ai/v1"
-    model: "gpt-oss-120b"
-    max_requests_per_minute: 5
+    provider: "mistral"
+    api_key: "PASTE_YOUR_MISTRAL_KEY"
+    base_url: "https://api.mistral.ai/v1"
+    model: "mistral-small-2603"
+    max_requests_per_minute: 60
+    # Mistral Small 4 is a reasoning model; this keeps structured JSON output unwrapped.
+    extra_body: {reasoning_effort: "none"}
+  # Optional alternative (Cerebras has no perpetual free tier, so it is not the default):
+  # tailoring:
+  #   provider: "cerebras"
+  #   api_key: "PASTE_YOUR_CEREBRAS_KEY"
+  #   base_url: "https://api.cerebras.ai/v1"
+  #   model: "gpt-oss-120b"
+  #   max_requests_per_minute: 5
 
 resume:
   master_tex_path: "resume/master.tex"

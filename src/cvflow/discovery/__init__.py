@@ -48,6 +48,7 @@ _EXCLUDE_BUCKET = {
 DROP_BUCKET_ORDER = [
     "too senior", "over-experience", "abroad", "wrong stack", "low pay",
     "night shift", "maintenance", "red flag", "other filter", "already seen", "capped",
+    "distill failed",
 ]
 
 
@@ -469,7 +470,12 @@ class DiscoveryService:
         by_id = {p.job_id: p for p in capped}
         distiller = Distiller(self._distiller_provider, seed=self._distill_seed)
         t = time.monotonic()
-        cruxes = distill_all(capped, self._store, distiller)
+        cruxes = distill_all(
+            capped, self._store, distiller,
+            on_failure=lambda p, exc: _drop(
+                drops, records, "distill failed", p, f"{type(exc).__name__}: {exc}"
+            ),
+        )
         distill_secs = time.monotonic() - t
         logger.info(
             "stage distill: %d/%d jobs in %.1fs", len(cruxes), len(capped), distill_secs

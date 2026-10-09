@@ -36,6 +36,7 @@ def _chat_client(cfg: ProviderConfig) -> ChatClient:
         model=cfg.model,
         max_requests_per_minute=cfg.max_requests_per_minute,
         seed_field="random_seed" if cfg.provider == "mistral" else "seed",
+        extra_body=cfg.extra_body,
     )
 
 

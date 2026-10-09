@@ -2,13 +2,14 @@
 
 One client talks to any OpenAI-style ``/chat/completions`` endpoint over the standard library
 (no extra HTTP dependency). It keeps every call inside the provider's free tier by tracking a
-per-minute request budget and raising :class:`RpmExceeded` before it would overrun the quota,
-rather than letting the host reject the call.
+per-minute request budget (sleeping until the window rolls rather than overrunning the quota)
+and retries transient 429/5xx responses with backoff.
 """
 
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -18,11 +19,21 @@ class LLMError(Exception):
 
 
 class RpmExceeded(LLMError):
-    """Raised when a call would exceed the configured requests-per-minute budget."""
+    """Legacy: no longer raised by normal pacing (the client sleeps instead)."""
+
+
+class LLMHTTPError(LLMError):
+    """A non-200 HTTP response; ``status`` lets callers tell transient from permanent."""
+
+    def __init__(self, message: str, status: int) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
 def _now_seconds() -> float:
-    import time
     return time.monotonic()
 
 
@@ -39,14 +50,14 @@ def _urllib_post(url: str, headers: dict[str, str], body: str) -> str:
     try:
         with urlopen(req, timeout=300) as resp:  # noqa: S310 (https by config)
             if resp.status != 200:
-                raise LLMError(f"POST {url} -> HTTP {resp.status}")
+                raise LLMHTTPError(f"POST {url} -> HTTP {resp.status}", resp.status)
             raw: bytes = resp.read()
             return raw.decode("utf-8", errors="replace")
     except HTTPError as exc:
         # urlopen raises on 4xx/5xx (e.g. a missing/invalid key -> 401) before the status check
-        # above. Wrap it as an LLMError so callers' ``except LLMError`` can degrade gracefully
-        # instead of a raw HTTPError crashing the run.
-        raise LLMError(f"POST {url} -> HTTP {exc.code}: {exc.reason}") from exc
+        # above. Wrap it as an LLMHTTPError so callers' ``except LLMError`` can degrade gracefully
+        # and the client can retry transient statuses.
+        raise LLMHTTPError(f"POST {url} -> HTTP {exc.code}: {exc.reason}", exc.code) from exc
     except URLError as exc:
         raise LLMError(f"POST {url} failed: {exc.reason}") from exc
 
@@ -55,7 +66,7 @@ class ChatClient:
     """OpenAI-compatible chat client; ``generate(prompt) -> str``.
 
     Standard-library transport (no new dependency). The per-minute budget guard keeps the
-    free tier intact by raising before it ever calls out.
+    free tier intact by sleeping until the window rolls when the budget is spent.
     """
 
     def __init__(
@@ -68,6 +79,9 @@ class ChatClient:
         seed_field: str = "seed",
         post_fn: Callable[[str, dict[str, str], str], str] = _urllib_post,
         now: Callable[[], float] = _now_seconds,
+        sleep: Callable[[float], None] = time.sleep,
+        max_retries: int = 3,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._api_key = api_key
@@ -77,6 +91,9 @@ class ChatClient:
         self._seed_field = seed_field
         self._post = post_fn
         self._now = now
+        self._sleep = sleep
+        self._max_retries = max_retries
+        self._extra_body = dict(extra_body or {})
         self._window_start = now()
         self._count = 0
 
@@ -86,7 +103,10 @@ class ChatClient:
             self._window_start = t
             self._count = 0
         if self._count >= self._max_rpm:
-            raise RpmExceeded(f"requests-per-minute budget reached ({self._max_rpm})")
+            self._sleep(max(0.0, 60.0 - (t - self._window_start)))
+            # Advance deterministically (a frozen clock never rolls the window by itself).
+            self._window_start = max(self._now(), self._window_start + 60.0)
+            self._count = 0
         self._count += 1
 
     def generate(
@@ -100,12 +120,12 @@ class ChatClient:
         json_object: bool = False,
         response_format: dict[str, Any] | None = None,
     ) -> str:
-        self._spend_one()
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
         payload: dict[str, Any] = {
+            **self._extra_body,
             "model": self._model,
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -121,7 +141,16 @@ class ChatClient:
             payload["response_format"] = response_format
         elif json_object:
             payload["response_format"] = {"type": "json_object"}
-        raw = self._post(self._url, headers, json.dumps(payload))
+        body = json.dumps(payload)
+        for attempt in range(1, self._max_retries + 1):
+            self._spend_one()
+            try:
+                raw = self._post(self._url, headers, body)
+                break
+            except LLMHTTPError as exc:
+                if exc.status not in _RETRY_STATUSES or attempt == self._max_retries:
+                    raise
+                self._sleep(float(2 ** (attempt - 1)))
         try:
             data = json.loads(raw)
             return str(data["choices"][0]["message"]["content"])

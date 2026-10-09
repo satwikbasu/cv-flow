@@ -62,3 +62,28 @@ def test_distiller_raises_on_unparseable_reply():
     prov = _Prov(reply="not json")
     with pytest.raises(ValidationError):
         Distiller(prov, seed=1).distill(_posting())
+
+
+def test_distill_all_reports_failed_jd_and_continues():
+    from cvflow.discovery.distill import distill_all
+
+    class _Store:
+        def get_crux(self, job_id, version):
+            return None
+
+        def save_crux(self, job_id, raw, version):
+            pass
+
+    class _Prov2:
+        def generate_structured(self, prompt, *, schema, seed, max_output_tokens):
+            if "job_id: bad" in prompt:
+                raise ValueError("boom")
+            return _REPLY
+
+    failures = []
+    out = distill_all(
+        [_posting("bad"), _posting("indeed:1")], _Store(), Distiller(_Prov2()),
+        on_failure=lambda p, e: failures.append((p.job_id, str(e))),
+    )
+    assert [c.job_id for c in out] == ["indeed:1"]
+    assert failures == [("bad", "boom")]
