@@ -456,6 +456,7 @@ class ResumeTailor:
                 "tectonic",
                 "-X",
                 "compile",
+                "--untrusted",
                 str(self._master.root / "master.tex"),
                 "--outdir",
                 str(outdir),
