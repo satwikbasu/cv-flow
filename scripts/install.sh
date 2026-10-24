@@ -71,7 +71,10 @@ checkout_ref() {
 }
 
 install_apt_deps() {
-    local pkgs="python3 python3-venv python3-pip git curl ca-certificates"
+    # The lib* entries are tectonic's runtime shared libraries; a minimal Ubuntu
+    # has python but not these, so tectonic would fail to start without them.
+    local pkgs="python3 python3-venv python3-pip git curl ca-certificates \
+libgraphite2-3 libfontconfig1 libharfbuzz0b libfreetype6"
     local missing="" p
     for p in ${pkgs}; do
         apt_installed "${p}" || missing="${missing} ${p}"
@@ -90,7 +93,7 @@ install_apt_deps() {
 install_tectonic() {
     local min="0.17.0" ver=""
     if cmd_exists tectonic; then
-        ver="$(tectonic --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+        ver="$(tectonic --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
         if [ -n "${ver}" ] && version_ge "${ver}" "${min}"; then
             log_ok "tectonic ${ver} already present"
             ensure_local_bin_on_path
@@ -113,9 +116,14 @@ install_tectonic() {
     rm -f "${installer}"
     ensure_local_bin_on_path
 
-    ver="$(tectonic --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+    if ! tectonic --version >/dev/null 2>&1; then
+        log_err "tectonic was installed but will not run (a missing system library?):"
+        tectonic --version >&2 || true
+        exit 1
+    fi
+    ver="$(tectonic --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
     if [ -z "${ver}" ] || ! version_ge "${ver}" "${min}"; then
-        log_err "tectonic ${ver:-unknown} is still below the required ${min}"
+        log_err "tectonic ${ver:-unknown} is below the required ${min}"
         exit 1
     fi
     log_ok "tectonic ${ver} installed"
