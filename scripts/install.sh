@@ -102,8 +102,15 @@ install_tectonic() {
     mkdir -p "${LOCAL_BIN}"
     # The official tectonic installer drops the binary into the current
     # directory. This is the one remote script we trust, pinned to https.
-    ( cd "${LOCAL_BIN}" \
-        && curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh )
+    # Download then run rather than piping into sh: a pipe closes once sh is
+    # done reading, leaving curl to exit non-zero and trip pipefail. The
+    # version check below is the real gate, so a noisy installer exit is fine.
+    local installer
+    installer="$(mktemp)"
+    curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net -o "${installer}"
+    ( cd "${LOCAL_BIN}" && sh "${installer}" ) \
+        || log_warn "tectonic installer exited non-zero; checking for the binary anyway"
+    rm -f "${installer}"
     ensure_local_bin_on_path
 
     ver="$(tectonic --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
