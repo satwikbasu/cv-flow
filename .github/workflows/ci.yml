@@ -4,6 +4,19 @@ on:
   push:
   pull_request:
 
+# Least privilege: the workflow only ever reads the checkout.
+permissions:
+  contents: read
+
+# Action versions are kept at their major tag (@v4 / @v5). GitHub resolves these
+# to the latest within the major; pin to a full commit sha if you need a frozen
+# supply chain.
+
+env:
+  # tectonic 0.17.0 musl asset, pinned to match scripts/install.sh.
+  TECTONIC_URL: "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz"
+  TECTONIC_SHA: "8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,12 +26,15 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install package
-        run: pip install -e ".[dev]"
-      - name: Install tectonic
+        run: pip install -e ".[dev]" -c constraints.txt
+      - name: Install tectonic (pinned, checksum-verified)
         run: |
           mkdir -p "$HOME/.local/bin"
-          cd "$HOME/.local/bin"
-          curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh
+          tmp="$(mktemp -d)"
+          curl --proto '=https' --tlsv1.2 -fsSL "$TECTONIC_URL" -o "$tmp/t.tar.gz"
+          echo "$TECTONIC_SHA  $tmp/t.tar.gz" | sha256sum -c -
+          tar -xzf "$tmp/t.tar.gz" -C "$HOME/.local/bin" tectonic
+          rm -rf "$tmp"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: ruff check .
       - run: mypy src
@@ -40,29 +56,70 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bats
       - run: bats scripts/tests
 
+  preflight-rejects-old-python:
+    # Ubuntu 22.04 ships Python 3.10 as the system python3. The preflight must
+    # reject it with a clear message before touching apt, sudo or any download.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer refuses Python 3.10
+        run: |
+          if python3 -c 'import sys; raise SystemExit(sys.version_info >= (3, 11))'; then
+            echo "runner python3 is already >= 3.11; cannot exercise the old-python path"
+            exit 0
+          fi
+          out="$(scripts/install.sh --non-interactive --no-services 2>&1 || true)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q "older than 3.11"
+
   install-idempotency:
-    runs-on: ubuntu-latest
+    # Run on both architectures so the per-arch tectonic download stays honest.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     container: ubuntu:24.04
     env:
       DEBIAN_FRONTEND: noninteractive
+      # Skip the heavy TeX bundle download; the install path is what we test.
+      CVFLOW_SKIP_TECTONIC_WARM: "1"
     steps:
       - name: Install base tooling and create a non-root user
         # The installer refuses to run as root, which is correct: the bot must
         # run as an unprivileged user. Create one with passwordless sudo for apt.
+        # python3 is preinstalled on a real Ubuntu Server; the bare container
+        # is not, so add it here. The installer's own apt step pulls the rest
+        # (python3-venv, python3-pip, curl).
         run: |
           apt-get update
-          apt-get install -y git sudo ca-certificates
+          apt-get install -y git sudo ca-certificates python3
           useradd -m -s /bin/bash cvflow
           echo "cvflow ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/cvflow
       - uses: actions/checkout@v4
       - name: Hand the workspace to the non-root user
         run: chown -R cvflow:cvflow .
       - name: First install run
-        # systemd is not available in a plain container, which is why
-        # --no-services exists; use it here.
-        run: sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 scripts/install.sh --non-interactive --no-services
+        # systemctl is absent in a plain container, so install_service writes
+        # the unit file and declines to start it. That is exactly what we want
+        # to assert below: a unit that is written but never started.
+        run: sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 CVFLOW_SKIP_TECTONIC_WARM=1 scripts/install.sh --non-interactive
+      - name: Unit is written, carries Environment=PATH, and is not started
+        run: |
+          unit="/home/cvflow/.config/systemd/user/cvflow.service"
+          test -f "$unit"
+          grep -q '^Environment=PATH=%h/.local/bin' "$unit"
+          # The installer must never start or enable-now the service.
+          ! grep -rq 'enable --now' scripts/install.sh
+      - name: The written unit is a valid systemd unit
+        # systemd-analyze parses the unit without a running manager, so it
+        # catches directive mistakes (e.g. a quoted WorkingDirectory that is no
+        # longer an absolute path) that a plain grep would miss.
+        run: |
+          apt-get install -y systemd >/dev/null
+          systemd-analyze verify /home/cvflow/.config/systemd/user/cvflow.service
       - name: Second install run must converge
         run: |
-          out="$(sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 scripts/install.sh --non-interactive --no-services)"
+          out="$(sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 CVFLOW_SKIP_TECTONIC_WARM=1 scripts/install.sh --non-interactive)"
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -q "already"
