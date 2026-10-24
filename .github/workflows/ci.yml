@@ -23,3 +23,46 @@ jobs:
       - run: ruff check .
       - run: mypy src
       - run: pytest -q
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck scripts/*.sh
+
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+      - run: bats scripts/tests
+
+  install-idempotency:
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install base tooling and create a non-root user
+        # The installer refuses to run as root, which is correct: the bot must
+        # run as an unprivileged user. Create one with passwordless sudo for apt.
+        run: |
+          apt-get update
+          apt-get install -y git sudo ca-certificates
+          useradd -m -s /bin/bash cvflow
+          echo "cvflow ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/cvflow
+      - uses: actions/checkout@v4
+      - name: Hand the workspace to the non-root user
+        run: chown -R cvflow:cvflow .
+      - name: First install run
+        # systemd is not available in a plain container, which is why
+        # --no-services exists; use it here.
+        run: sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 scripts/install.sh --non-interactive --no-services
+      - name: Second install run must converge
+        run: |
+          out="$(sudo -u cvflow -H env CVFLOW_SKIP_VALIDATION=1 scripts/install.sh --non-interactive --no-services)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q "already"
