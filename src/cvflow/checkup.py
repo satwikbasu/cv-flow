@@ -48,13 +48,16 @@ def run_checkup(
 ) -> int:
     root = Path(repo_root)
     failures = 0
+    profile_failures = 0
 
     def ok(msg: str) -> None:
         echo(f"✓ {msg}")
 
-    def bad(msg: str) -> None:
-        nonlocal failures
+    def bad(msg: str, *, profile: bool = False) -> None:
+        nonlocal failures, profile_failures
         failures += 1
+        if profile:
+            profile_failures += 1
         echo(f"✗ {msg}")
 
     def at(p: str | Path) -> Path:
@@ -67,6 +70,11 @@ def run_checkup(
         return 1
     ok(f"Config loads ({at(config_path)})")
 
+    if cfg.telegram.authorized_user_id == 0:
+        bad("Telegram authorized_user_id is 0; set it to your numeric id or the bot ignores you")
+    else:
+        ok(f"Telegram authorized_user_id set ({cfg.telegram.authorized_user_id})")
+
     profile = at(cfg.profile.knowledge_base_dir)
     try:
         kb = KnowledgeBase.load(profile, at(cfg.storage.form_fields_path))
@@ -75,20 +83,20 @@ def run_checkup(
         if missing:
             echo(f"  INFO {len(missing)} empty form fields to fill in: {', '.join(missing)}")
     except Exception as exc:  # noqa: BLE001 — any load failure is a reported check failure
-        bad(f"Knowledge base loads: {exc}")
+        bad(f"Knowledge base loads: {exc}", profile=True)
 
     skills_path = profile / "candidate_skills.yaml"
     try:
         if not skills_path.exists():
-            bad(f"Skills profile: {skills_path} missing — run /onboard to create it")
+            bad(f"Skills profile: {skills_path} missing - run /onboard to create it", profile=True)
         else:
             skills, _syn = load_skill_profile(skills_path)
             if skills:
                 ok(f"Skills profile loads ({len(skills)} skills)")
             else:
-                bad(f"Skills profile: {skills_path} is empty — run /onboard")
+                bad(f"Skills profile: {skills_path} is empty - run /onboard", profile=True)
     except Exception as exc:  # noqa: BLE001
-        bad(f"Skills profile: {exc}")
+        bad(f"Skills profile: {exc}", profile=True)
 
     master = None
     try:
@@ -96,16 +104,19 @@ def run_checkup(
         wired = {p.project_id for p in master.projects}
         stems = {p.stem for p in (profile / "projects").glob("*.md")}
         if not master.section_order:
-            bad("Résumé wiring: master.tex includes no sections")
+            bad("Résumé wiring: master.tex includes no sections", profile=True)
         elif wired != stems:
+            only_resume = sorted(wired - stems)
+            only_profile = sorted(stems - wired)
             bad(
-                "Résumé wiring: projects mismatch — "
-                f"only in résumé: {sorted(wired - stems)}, only in profile: {sorted(stems - wired)}"
+                "Résumé wiring: projects mismatch - "
+                f"only in résumé: {only_resume}, only in profile: {only_profile}",
+                profile=True,
             )
         else:
             ok(f"Résumé wired ({len(master.section_order)} sections, {len(wired)} projects)")
     except Exception as exc:  # noqa: BLE001
-        bad(f"Résumé wiring: {exc}")
+        bad(f"Résumé wiring: {exc}", profile=True)
 
     if master is None:
         echo("  INFO résumé compile skipped (résumé did not parse)")
@@ -117,7 +128,7 @@ def run_checkup(
                 ResumeTailor(None, master).compile_master(out)  # type: ignore[arg-type]
             ok("Résumé compiles")
         except CompileError as exc:
-            bad(f"Résumé compiles: {exc}")
+            bad(f"Résumé compiles: {exc}", profile=True)
 
     if offline:
         echo("  INFO provider reachability skipped (--offline)")
@@ -135,7 +146,12 @@ def run_checkup(
             else:
                 bad(f"Provider {name} unreachable or rejected the key ({base_url})")
 
-    echo("All checks passed." if not failures else f"{failures} check(s) failed.")
+    if not failures:
+        echo("All checks passed.")
+    elif failures == profile_failures:
+        echo(f"{failures} check(s) failed; expected until you run onboard.")
+    else:
+        echo(f"{failures} check(s) failed.")
     return 1 if failures else 0
 
 
