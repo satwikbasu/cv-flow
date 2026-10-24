@@ -21,6 +21,7 @@ class CompileOutcome:
     attempts: int
     log_excerpt: str
     flagged: bool
+    lost: str = ""
 
 
 def _excerpt(out: Path, root: Path, stderr: str) -> str:
@@ -44,6 +45,23 @@ def _tex_files(root: Path) -> dict[str, str]:
     }
 
 
+def _counts(root: Path) -> dict[str, int]:
+    """A coarse structural fingerprint of the resume - how many bullets, projects, and
+    sections it holds - so we can tell when an automatic fix quietly removed content."""
+    blob = "\n".join(_tex_files(root).values())
+    return {
+        "bullets": blob.count("\\resumeItem{"),
+        "projects": blob.count("\\resumeProjectHeading"),
+        "sections": blob.count("\\section{"),
+    }
+
+
+def _loss_note(before: dict[str, int], after: dict[str, int]) -> str:
+    """Name anything the repair shrank, or return '' when nothing was lost."""
+    drops = [f"{k} {before[k]}->{after[k]}" for k in before if after[k] < before[k]]
+    return "the automatic LaTeX fix removed content (" + ", ".join(drops) + ")" if drops else ""
+
+
 def _write_repairs(root: Path, files: dict[str, str]) -> None:
     base = root.resolve()
     for name, body in files.items():
@@ -62,7 +80,9 @@ def compile_with_repair(
     runner: Callable[..., Any] = subprocess.run,
 ) -> CompileOutcome:
     root = Path(resume_root)
+    baseline = _counts(root)
     excerpt = ""
+    repaired = False
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
         for n in range(1, attempts + 1):
@@ -73,11 +93,13 @@ def compile_with_repair(
                 text=True,
             )
             if res.returncode == 0 and (out / "master.pdf").exists():
-                return CompileOutcome(True, n, "", False)
+                lost = _loss_note(baseline, _counts(root)) if repaired else ""
+                return CompileOutcome(True, n, "", bool(lost), lost)
             excerpt = _excerpt(out, root, res.stderr)
             if n == attempts:
                 break
             _write_repairs(root, backend.repair(build_fix_prompt(_tex_files(root), excerpt)))
+            repaired = True
             try:
                 parse_master(root)
             except Exception as exc:

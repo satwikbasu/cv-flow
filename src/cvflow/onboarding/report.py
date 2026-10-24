@@ -59,5 +59,7 @@ def render_report(
         )
         if compile_outcome.log_excerpt:
             lines.append(compile_outcome.log_excerpt)
+    if compile_outcome.lost:
+        lines.append("WARNING: " + compile_outcome.lost + " - check your resume is complete.")
     lines.append("Next steps: fill the blank fields above, fix any flagged items, then confirm.")
     return _chunk(lines)
