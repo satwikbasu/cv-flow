@@ -23,6 +23,7 @@ from cvflow.onboarding import OnboardingError
 from cvflow.onboarding.applier import apply_bundle
 from cvflow.onboarding.backends import GenerationBackend
 from cvflow.onboarding.compile_repair import CompileOutcome, compile_with_repair
+from cvflow.onboarding.factcheck import unverified_numbers
 from cvflow.onboarding.parse import ResumeParseError, parse_resumes
 from cvflow.onboarding.prompt import build_prompt
 from cvflow.onboarding.report import render_report
@@ -179,6 +180,7 @@ def run_onboard(
         return OnboardOutcome(
             [f"Profile generation failed, nothing was written: {exc}"], None, True, False
         )
+    suspect = unverified_numbers(bundle.resume, [parsed.text, *user_facts.values()])
     notify("applying...")
     try:
         applied = apply_bundle(bundle, repo_root, config_path=config_path, force=force)
@@ -199,6 +201,13 @@ def run_onboard(
         except CompileError as exc:
             pdf_path, flagged = None, True
             extra.append(f"Resume PDF could not be produced: {exc}")
+    if suspect:
+        extra.append(
+            "Double-check these numbers in your resume - I could not find them in the file "
+            "you uploaded or in your answers, so confirm they are real before you use it: "
+            + ", ".join(suspect) + "."
+        )
+        flagged = True
     report = render_report(bundle, applied, outcome, kb) + extra
     if applied.staged_config is not None:
         report.append(

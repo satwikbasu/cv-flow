@@ -78,6 +78,18 @@ def test_run_onboard_refuses_clobber(tmp_path: Path) -> None:
     assert not out.ok and not out.flagged and "Could not apply" in out.report[0]
 
 
+def test_run_onboard_flags_unverified_numbers(tmp_path: Path) -> None:
+    repo = _repo(_mk(tmp_path), config=True)
+    b = _bundle()  # source resume (_resume) has no numbers, so an invented one must surface
+    b.resume.sections = {**b.resume.sections, "exp": r"\resumeItem{Grew revenue 99\%}"}
+    out = run_onboard(
+        [_resume(tmp_path)], backend=FakeBackend(b), repo_root=repo, user_facts={},
+        compile_repair=lambda *a, **k: OK,
+    )
+    assert out.flagged and not out.ok
+    assert any("99" in line for line in out.report)
+
+
 @pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
 def test_run_onboard_real_compile(tmp_path: Path) -> None:
     repo = _repo(_mk(tmp_path), config=True)
