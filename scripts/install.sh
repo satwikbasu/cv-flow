@@ -185,7 +185,10 @@ install_tectonic() {
     local tmpdir archive
     tmpdir="$(mktemp -d)"
     # Clean the scratch dir up whichever way this function leaves.
-    trap 'rm -rf "${tmpdir}"' RETURN
+    # The RETURN trap can fire again on a later function return (bash does not
+    # scope it tightly), by which point tmpdir is out of scope; keep it safe
+    # under 'set -u' and harmless when there is nothing to remove.
+    trap 'rm -rf "${tmpdir:-}" 2>/dev/null || true' RETURN
     archive="${tmpdir}/${asset}"
 
     log "Downloading tectonic ${TECTONIC_VERSION} (${arch})"
