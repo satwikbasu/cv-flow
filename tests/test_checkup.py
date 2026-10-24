@@ -12,6 +12,7 @@ def _good_tree(tmp_path: Path, *, frontier: bool = False) -> tuple[Path, Path]:
     repo = _repo(tmp_path)
     apply_bundle(_bundle(), repo)
     cfg = yaml.safe_load((repo / "config.example.yaml").read_text())
+    cfg["telegram"]["authorized_user_id"] = 42
     cfg["resume"]["master_tex_path"] = str(repo / "resume" / "master.tex")
     cfg["storage"]["form_fields_path"] = str(repo / "profile" / "form_fields.json")
     cfg["storage"]["db_path"] = str(repo / "data" / "cvflow.db")
@@ -50,6 +51,18 @@ def test_good_tree_passes(tmp_path: Path) -> None:
     assert text.count("✓") >= 6 - (0 if shutil.which("tectonic") else 1)
     # form_fields are all empty in the fixture: reported but not a failure.
     assert "empty form fields" in text
+
+
+def test_zero_authorized_user_id_fails(tmp_path: Path) -> None:
+    repo, path = _good_tree(tmp_path)
+    cfg = yaml.safe_load(path.read_text())
+    cfg["telegram"]["authorized_user_id"] = 0
+    path.write_text(yaml.safe_dump(cfg))
+    code, text = _run(repo, path, offline=True)
+    assert code == 1
+    assert "authorized_user_id is 0" in text
+    # a non-profile failure, so it is not softened to "expected until onboard"
+    assert "expected until you run onboard" not in text
 
 
 def test_offline_skips_providers(tmp_path: Path) -> None:
