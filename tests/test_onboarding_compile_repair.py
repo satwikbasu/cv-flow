@@ -46,6 +46,20 @@ def test_fail_fail_pass(tmp_path: Path) -> None:
     assert "Go" in (root / "sections" / "skills.tex").read_text()
 
 
+def test_repair_that_drops_content_is_flagged(tmp_path: Path) -> None:
+    root = tmp_path / "resume"
+    (root / "sections").mkdir(parents=True)
+    (root / "master.tex").write_text("\\input{sections/exp.tex}\n")
+    (root / "sections" / "exp.tex").write_text(
+        "\\section{Experience}\n\\resumeItem{Did A}\n\\resumeItem{Did B}\n"
+    )
+    # the "fix" compiles and keeps a valid section, but silently drops a bullet
+    be = FakeBackend({"sections/exp.tex": "\\section{Experience}\n\\resumeItem{Did A}\n"})
+    out = compile_with_repair(root, be, runner=_runner([False, True]))
+    assert out.ok  # it did compile
+    assert out.flagged and "bullets 2" in out.lost  # but content shrank, so it's flagged
+
+
 def test_always_fails_flags(tmp_path: Path) -> None:
     root = _tree(tmp_path / "resume")
     be = FakeBackend({})
