@@ -256,8 +256,10 @@ class DiscoveryService:
         self._search_terms = search_terms
         self._locations = locations
         self._sites = sites
-        # Naukri's API needs our own nkparam-signed client (JobSpy's naukri 406s); split it out of
-        # the JobSpy site list and fetch it via the dedicated adapter.
+        # Naukri goes through our own nkparam-signed adapter, not JobSpy. JobSpy's Naukri support
+        # works now but returns fewer fields (no salary range, experience or description, which the
+        # ranking and distil stages need) and returns nothing on a block, whereas our adapter raises
+        # so the digest can say "Naukri was unreachable today". Split it out and fetch it dedicated.
         self._naukri_search_fn = naukri_search_fn
         self._naukri_enabled = "naukri" in sites
         self._jobspy_sites = [s for s in sites if s != "naukri"]
