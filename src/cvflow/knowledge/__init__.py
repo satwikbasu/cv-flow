@@ -1,4 +1,4 @@
-"""Knowledge-base loader — reads the user's profile into LLM context.
+"""Knowledge-base loader, reads the user's profile into LLM context.
 
 The profile is the single source of truth about the user. Loading reads every
 ``profile/**/*.md`` (skipping ``*.example.md`` templates and ``README.md``) plus

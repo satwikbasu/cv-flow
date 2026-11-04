@@ -83,7 +83,7 @@ def crux_salary_lpa(crux: Any) -> float | None:
         return None
     annual = float(amount) * 12 if s.period == "month" else float(amount)
     if s.period not in ("year", "month", "unknown"):
-        return None  # hourly etc. — don't guess
+        return None  # hourly etc., don't guess
     return annual / 100_000
 
 
@@ -158,7 +158,7 @@ _FIT_PREAMBLE = (
     "  0-39  : weight<0.3 OR an unrelated role (e.g. support/helpdesk, QA/test, ERP/CRM, "
     "pure frontend, data-entry) EVEN IF a few tools coincide.\n"
     "A shared tool or two (e.g. Linux, Docker, Python) does NOT lift an unrelated/low-weight "
-    "role above 39 — do not reward incidental overlap.\n"
+    "role above 39, do not reward incidental overlap.\n"
     "Modifiers (after the band): -10 service/staffing company; +5 modern infra stack "
     "(docker/k8s/ci-cd/cloud). Clamp 0-100.\n"
     "must_have_skills is given only as context for judging overlap. A deterministic code "
@@ -170,7 +170,7 @@ _FIT_PREAMBLE = (
     "ROLE_ADJACENT)}. Score EVERY job_id given; use only the given job_ids.\n"
 )
 
-# Strict JSON-schema for the fit batch — some hosts ignore schemas and emit a single object, so
+# Strict JSON-schema for the fit batch, some hosts ignore schemas and emit a single object, so
 # fit runs on the distillation provider (Mistral), which enforces this exactly.
 _FIT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -285,7 +285,7 @@ def fit_scores(
                 "json_schema": {"name": "FitBatch", "strict": True, "schema": _FIT_SCHEMA},
             },
         )
-    except Exception as exc:  # noqa: BLE001 — degrade, never lose the cohort
+    except Exception as exc:  # noqa: BLE001 (degrade, never lose the cohort)
         logger.warning("fit scoring call failed (%s); degrading cohort to fit 0", exc)
         return {jid: FitResult(0, "(ranking unavailable)", ["RANKING_DEGRADED"]) for jid in ids}
     # response_format=json_object may wrap the array in an object; accept either, and salvage
@@ -304,7 +304,7 @@ def fit_scores(
         return {jid: FitResult(0, "(ranking unavailable)", ["RANKING_DEGRADED"]) for jid in ids}
     out: dict[str, FitResult] = {}
     for entry in parsed if isinstance(parsed, list) else []:
-        if not isinstance(entry, dict):  # the ranker sometimes returns bare strings — skip
+        if not isinstance(entry, dict):  # the ranker sometimes returns bare strings, skip
             continue
         jid = str(entry.get("job_id"))
         if jid not in ids:

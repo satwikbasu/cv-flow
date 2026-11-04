@@ -187,7 +187,7 @@ class _FakeTailor:
         return pdf
 
     def diff(self, plan: Any) -> str:
-        return "No bullets reworded — every line is verbatim from your master resume."
+        return "No bullets reworded, every line is verbatim from your master resume."
 
 
 def _crux_store(calls: list[str]) -> _TrackingStore:
@@ -207,7 +207,7 @@ def test_tailor_compiles_then_flips_status_and_returns_result(tmp_path: Path) ->
 
     class _StatusTracking(_FakeTailor):
         def compile_tailored(self, plan: Any, outdir: Any, *, stem: str) -> Path:
-            # status must still be discovered while compiling — it flips only on success
+            # status must still be discovered while compiling, it flips only on success
             assert store.get("m:1").status is Status.DISCOVERED  # type: ignore[union-attr]
             return super().compile_tailored(plan, outdir, stem=stem)
 

@@ -1,8 +1,8 @@
 """Distil one JD into a structured, enum-heavy Crux.
 
 Engine: any OpenAI-compatible provider with ``generate_structured`` (default: Mistral
-``mistral-small`` — fast, high throughput, strict JSON). The distiller is told never to infer
-salary or years of experience — absent facts become null/"unknown".
+``mistral-small``, fast, high throughput, strict JSON). The distiller is told never to infer
+salary or years of experience, absent facts become null/"unknown".
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ logger = logging.getLogger("cvflow.discovery.distill")
 
 __all__ = ["Crux", "Salary", "Distiller", "distill_all", "DISTILL_VERSION"]
 
-# Bump whenever the distill prompt or Crux schema changes — invalidates cached cruxes so the new
+# Bump whenever the distill prompt or Crux schema changes, invalidates cached cruxes so the new
 # extraction takes effect without a manual cache wipe.
 DISTILL_VERSION = "4"
 
@@ -65,7 +65,7 @@ _PREAMBLE = (
     "- Use ONLY facts present in the text. If a fact is not stated, output null "
     "(or \"unknown\" for enums).\n"
     "- NEVER infer or estimate salary or years of experience.\n"
-    "- role_family: classify from the DESCRIPTION, not the title. Be STRICT — only use a "
+    "- role_family: classify from the DESCRIPTION, not the title. Be STRICT, only use a "
     "specific family when the role genuinely IS that. Map: customer/technical SUPPORT or "
     "helpdesk -> other; manual QA / test / SDET -> other; ERP/CRM functional or developer "
     "(Odoo, SAP, Salesforce, Dynamics, ServiceNow) -> other; pure data-entry/ops -> other. "
@@ -86,7 +86,7 @@ _PREAMBLE = (
     "have' / 'required' / 'mandatory' / 'minimum qualification'. A deterministic gate matches "
     "these against the candidate's skill list, so they MUST be specific tool names. NEVER "
     "output generic phrases ('backend development', 'system design', 'api design', 'data "
-    "structures', 'software engineering', 'problem solving') — those are not skills to match; "
+    "structures', 'software engineering', 'problem solving'), those are not skills to match; "
     "omit them. If the JD merely lists technologies or 'responsibilities', or states no "
     "mandatory named tool, return []. Do NOT dump the whole stack. Lowercased, normalized.\n"
     "- one_line: <=140 char neutral summary.\n"
@@ -144,12 +144,12 @@ def distill_all(
                 out.append(Crux.model_validate_json(cached))
                 logger.info("distill %d/%d %s (cached)", i, total, p.job_id)
                 continue
-            except Exception as exc:  # noqa: BLE001 — corrupt cache -> re-distill
+            except Exception as exc:  # noqa: BLE001 (corrupt cache -> re-distill)
                 logger.warning("stale crux %s (%s); re-distilling", p.job_id, exc)
         t = time.monotonic()
         try:
             crux = distiller.distill(p)
-        except Exception as exc:  # noqa: BLE001 — isolate a bad/garbled/over-budget JD
+        except Exception as exc:  # noqa: BLE001 (isolate a bad/garbled/over-budget JD)
             logger.warning("distill %d/%d %s FAILED: %s", i, total, p.job_id, exc)
             if on_failure is not None:
                 on_failure(p, exc)

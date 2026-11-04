@@ -1,4 +1,4 @@
-"""digest_summary — log writer, drop compressor, and LLM summarizer for discover output."""
+"""digest_summary, log writer, drop compressor, and LLM summarizer for discover output."""
 from __future__ import annotations
 
 import logging
@@ -43,7 +43,7 @@ def compress_drops(records: list[DropRecord], samples_per_bucket: int) -> str:
     """Return a constant-size compact block suitable for an LLM prompt.
 
     Groups records by bucket and emits one line per non-empty bucket in DROP_BUCKET_ORDER:
-        '- <bucket>: <count> — e.g. "<label1>", "<label2>", ...'
+        '- <bucket>: <count>, e.g. "<label1>", "<label2>", ...'
     Buckets not in DROP_BUCKET_ORDER come last in first-seen order.
     Returns '' when records is empty.
     """
@@ -71,7 +71,7 @@ def compress_drops(records: list[DropRecord], samples_per_bucket: int) -> str:
     lines: list[str] = []
     for b in known + unknown:
         eg = ", ".join(f'"{s}"' for s in samples[b])
-        suffix = f" — e.g. {eg}" if eg else ""
+        suffix = f", e.g. {eg}" if eg else ""
         lines.append(f"- {b}: {counts[b]}{suffix}")
 
     return "\n".join(lines)
@@ -105,14 +105,14 @@ def summarize_drops(
         f"Write a single paragraph of at most {max_chars} characters summarising the above in "
         "plain, friendly language. Group jobs by reason. Name the biggest buckets and include a "
         "couple of example job titles. If there is no 'low pay' bucket you may note that nothing "
-        "was dropped on salary grounds. Do NOT invent jobs or counts — use only what is shown "
+        "was dropped on salary grounds. Do NOT invent jobs or counts, use only what is shown "
         "above. No markdown, no lists, just prose."
     )
 
     try:
         raw: str = provider.generate(prompt, temperature=0.3, max_tokens=max_tokens)
     except LLMError as exc:
-        # The caller falls back to the deterministic footer — but log WHY so a persistently
+        # The caller falls back to the deterministic footer, but log WHY so a persistently
         # failing summary provider is diagnosable.
         logger.warning("drop summary failed (%s); falling back to footer", exc)
         return None

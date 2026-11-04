@@ -4,7 +4,7 @@ Job boards report when a posting went up in wildly different shapes: a clean ISO
 some, "2 Days Ago" or "30+ days ago" from others, "Just posted" or nothing at all. We parse
 what we can into a real date and return ``None`` rather than guess when we can't. The digest
 then shows "posted 3d ago" when the posting date is known, falling back to "found 3d ago"
-(based on when we first saw it) when it isn't — honest about which date we actually have.
+(based on when we first saw it) when it isn't, honest about which date we actually have.
 """
 
 from __future__ import annotations

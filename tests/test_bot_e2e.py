@@ -1,6 +1,6 @@
 """End-to-end bot flow with the network mocked out.
 
-Real store, real run bodies, real renderers, real ResumeTailor + tectonic —
+Real store, real run bodies, real renderers, real ResumeTailor + tectonic,
 only the job scrape and the LLM replies are faked. This is the W-milestone
 check: digest with buttons, tailor to a PDF + diff, skip, backlog filters,
 expiry, heartbeat.
@@ -149,7 +149,7 @@ async def test_full_flow_discover_tailor_skip_jobs_expiry_heartbeat(tmp_path: Pa
     )
     context = SimpleNamespace(bot_data={"services": services})
 
-    # 1. /discover — digest lands in chat, quick-action buttons follow
+    # 1. /discover, digest lands in chat, quick-action buttons follow
     update = _update("/discover")
     await on_text(update, context)
     digest = chat[0]
@@ -162,23 +162,23 @@ async def test_full_flow_discover_tailor_skip_jobs_expiry_heartbeat(tmp_path: Pa
     assert "tailor:m:1" in callbacks and "skip:n:1" in callbacks
     assert store.get("stale:1").status is Status.EXPIRED  # type: ignore[union-attr]
 
-    # 2. [Tailor] button on job 1 — compiles a real PDF, posts the honest diff
+    # 2. [Tailor] button on job 1, compiles a real PDF, posts the honest diff
     tap = _button_update("tailor:m:1")
     await on_button(tap, context)
     assert store.get("m:1").status is Status.TAILORED  # type: ignore[union-attr]
     text = _replies(tap)
-    assert "✅ Tailored — Backend Dev @ Acme" in text
+    assert "✅ Tailored: Backend Dev @ Acme" in text
     assert "No bullets reworded" in text  # rephrase off -> verbatim promise
     sent_doc = tap.effective_message.reply_document.await_args.kwargs
     assert sent_doc["filename"].endswith(".pdf")
     assert (tmp_path / sent_doc["filename"]).stat().st_size > 0
 
-    # 3. /skip 2 — the other job leaves the open list
+    # 3. /skip 2, the other job leaves the open list
     update = _update("skip 2")
     await on_text(update, context)
     assert store.get("n:1").status is Status.SKIPPED  # type: ignore[union-attr]
 
-    # 4. /jobs filters — open is empty now; all shows the tailored one marked
+    # 4. /jobs filters, open is empty now; all shows the tailored one marked
     update = _update("/jobs")
     await on_text(update, context)
     assert "/discover" in _replies(update)  # friendly empty backlog
@@ -187,7 +187,7 @@ async def test_full_flow_discover_tailor_skip_jobs_expiry_heartbeat(tmp_path: Pa
     listing = _replies(update)
     assert "Backend Dev @ Acme" in listing and "tailored" in listing.lower()
 
-    # 5. /status + heartbeat — expiry and the rest visible in the counts
+    # 5. /status + heartbeat, expiry and the rest visible in the counts
     update = _update("/status")
     await on_text(update, context)
     counts = _replies(update)

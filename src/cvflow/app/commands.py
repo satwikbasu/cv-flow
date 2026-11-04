@@ -2,7 +2,7 @@
 
 The parser accepts ``/tailor 3``, ``tailor 3``, ``t 3``, a bare ``3`` right
 after a list, ``skip 2 4``, ``skip 2-4``, and the plain commands. Anything it
-can't read with certainty returns ``None`` so the handler replies with a hint —
+can't read with certainty returns ``None`` so the handler replies with a hint,
 it never guesses and never stays silent.
 
 The handlers stay thin: auth check, parse, resolve ordinals against the stored
@@ -133,17 +133,17 @@ class Services:
 
 
 _HELP = (
-    "cv-flow finds jobs and tailors your resume — it never applies for you.\n\n"
-    "/discover — hunt for jobs now (also runs daily)\n"
-    "/tailor N — tailor the resume for job N from the last list\n"
-    "/skip N — hide job N (also: skip 2 4, skip 2-4)\n"
-    "/jobs [open|tailored|all] — the backlog, freshly numbered\n"
-    "/status — counts per state\n"
-    "/help — this message\n\n"
-    "Plain text works too: “tailor 3”, “t 3”, or just “3” after a list."
+    "cv-flow finds jobs and tailors your resume. It never applies for you.\n\n"
+    "/discover: hunt for jobs now (also runs daily)\n"
+    "/tailor N: tailor the resume for job N from the last list\n"
+    "/skip N: hide job N (also: skip 2 4, skip 2-4)\n"
+    "/jobs [open|tailored|all]: the backlog, freshly numbered\n"
+    "/status: counts per state\n"
+    "/help: this message\n\n"
+    "Plain text works too: 'tailor 3', 't 3', or just '3' after a list."
 )
 
-_HINT = "🤔 I didn't catch that. Try /tailor 3, /skip 2, /jobs — or /help for everything."
+_HINT = "🤔 I didn't catch that. Try /tailor 3, /skip 2, /jobs, or /help for everything."
 
 
 def build_job_keyboard(slots: list[tuple[int, str]]) -> InlineKeyboardMarkup:
@@ -176,15 +176,15 @@ def _label(services: Services, job_id: str) -> str:
 async def _do_discover(message: Any, services: Services) -> None:
     if services.discover_lock.locked():
         await message.reply_text(
-            "⏳ A discovery run is already in progress — the digest is on its way."
+            "⏳ A discovery run is already in progress, the digest is on its way."
         )
         return
     async with services.discover_lock:
-        await message.reply_text("🔎 Discovery started — I'll post the digest here soon.")
+        await message.reply_text("🔎 Discovery started, I'll post the digest here soon.")
         loop = asyncio.get_running_loop()
         try:
             outcome = await loop.run_in_executor(None, services.discover)
-        except Exception as exc:  # noqa: BLE001 — a failed run must reach the user
+        except Exception as exc:  # noqa: BLE001 (a failed run must reach the user)
             await message.reply_text(f"⚠️ Discovery failed: {exc}")
             return
     if outcome.ordered_job_ids:
@@ -197,17 +197,17 @@ async def _do_discover(message: Any, services: Services) -> None:
 async def _do_tailor(job_id: str, message: Any, services: Services) -> None:
     label = _label(services, job_id)
     if services.tailor_lock.locked():
-        await message.reply_text("⏳ A tailoring run is already in progress — try again shortly.")
+        await message.reply_text("⏳ A tailoring run is already in progress, try again shortly.")
         return
     async with services.tailor_lock:
-        await message.reply_text(f"✂️ Tailoring {label} — the resume + diff will land here.")
+        await message.reply_text(f"✂️ Tailoring {label}, the resume + diff will land here.")
         loop = asyncio.get_running_loop()
         try:
             result = await loop.run_in_executor(None, services.tailor, job_id)
-        except Exception as exc:  # noqa: BLE001 — a failed run must reach the user
+        except Exception as exc:  # noqa: BLE001 (a failed run must reach the user)
             await message.reply_text(f"⚠️ Tailoring failed for {label}: {exc}")
             return
-        headline = f"✅ Tailored — {result['role']} @ {result['company']}"
+        headline = f"✅ Tailored: {result['role']} @ {result['company']}"
         await message.reply_text(f"{headline}\n\n{result['diff']}")
         pdf = Path(result["pdf_path"])
         with pdf.open("rb") as fh:
@@ -219,7 +219,7 @@ async def _do_skip(ordinals: list[int], message: Any, services: Services) -> Non
     for n in ordinals:
         job_id = services.store.get_digest_slot(n)
         if job_id is None:
-            lines.append(f"⚠️ No job {n} on the last list — run /jobs to renumber.")
+            lines.append(f"⚠️ No job {n} on the last list. Run /jobs to renumber.")
             continue
         label = _label(services, job_id)
         try:
@@ -295,6 +295,6 @@ async def on_text(update: Any, context: Any) -> None:
         n = action.ordinals[0]
         job_id = services.store.get_digest_slot(n)
         if job_id is None:
-            await message.reply_text(f"⚠️ No job {n} on the last list — run /jobs to renumber.")
+            await message.reply_text(f"⚠️ No job {n} on the last list. Run /jobs to renumber.")
             return
         await _do_tailor(job_id, message, services)

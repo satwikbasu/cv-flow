@@ -67,7 +67,7 @@ def run_discover(
     order + digest, notify, then (optionally) send the drop report message.
 
     The retention sweep leads so expired jobs never occupy digest slots, and it
-    keys off ``discovered_at`` — the fuzzy posting date plays no part in expiry.
+    keys off ``discovered_at``, the fuzzy posting date plays no part in expiry.
     """
     expired = store.expire_stale(now(), retention_days)
     result = discovery.discover(progress=progress or (lambda _m: None))
@@ -112,7 +112,7 @@ def run_tailor(
     """Tailor one job to a compiled PDF and flip it to ``tailored``.
 
     The status check runs before any LLM or tectonic work, and the flip happens
-    only AFTER a successful compile — a failed run never half-moves a job.
+    only AFTER a successful compile, a failed run never half-moves a job.
     """
     app = store.get(job_id)
     if app is None:
@@ -139,7 +139,7 @@ def run_tailor(
 def run_heartbeat(store: ApplicationStore) -> str:
     """One-line liveness message with per-status counts."""
     counts = ", ".join(f"{s.value}={len(store.list_by_status(s))}" for s in Status)
-    return f"💓 cv-flow alive — {counts}"
+    return f"💓 cv-flow alive: {counts}"
 
 
 @dataclass(frozen=True)

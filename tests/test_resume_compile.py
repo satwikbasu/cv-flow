@@ -48,7 +48,7 @@ def test_tailored_document_reorders_and_selects_projects() -> None:
 def test_tailored_document_always_keeps_the_heading() -> None:
     master = parse_master(FIXTURE_ROOT)
     tailor = ResumeTailor(_Stub(), master)
-    # Even a plan that keeps only one section must retain the name/contact heading —
+    # Even a plan that keeps only one section must retain the name/contact heading,
     # it lives between \begin{document} and the first section input.
     plan = TailoringPlan(section_order=["skills"], selected_project_ids=[], diff_narration="")
     doc = tailor.tailored_document(plan)

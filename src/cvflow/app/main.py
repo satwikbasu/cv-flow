@@ -2,7 +2,7 @@
 
 ``build_services`` wires storage, knowledge, discovery, the resume tailor and
 the notifier into the two blocking run callables the handlers and scheduler
-share. Nothing here talks to the network at build time — the LLM clients and
+share. Nothing here talks to the network at build time, the LLM clients and
 the notifier only reach out when a run actually happens.
 """
 
@@ -199,7 +199,7 @@ def _frontier_provider(fr: Any) -> ProviderConfig:
     return ProviderConfig(fr.provider, fr.api_key, fr.base_url, fr.model, 30)
 
 
-def main() -> None:  # pragma: no cover — the composition is tested; polling is not
+def main() -> None:  # pragma: no cover (the composition is tested; polling is not)
     config_path = os.environ.get("CVFLOW_CONFIG", "config.yaml")
     config = load_config(config_path)
     services = build_services(config, config_path=config_path)

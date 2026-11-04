@@ -29,7 +29,7 @@ def normalize(skill: str) -> str:
 def load_skill_profile(path: str | Path) -> tuple[frozenset[str], dict[str, str]]:
     """Load ``{skills: [...], synonyms: {alias: canonical}}`` from YAML.
 
-    A missing or empty file disables the gate (returns an empty profile) rather than erroring —
+    A missing or empty file disables the gate (returns an empty profile) rather than erroring,
     discovery must never abort on a missing optional input.
     """
     p = Path(path)
@@ -64,7 +64,7 @@ def coverage_drop(
     """Decide whether a job is dropped for missing too many must-have skills.
 
     Drops when the candidate lacks strictly more than ``max_missing_ratio`` of the job's
-    must-have skills (by default, missing the majority). An empty must-have list never drops —
+    must-have skills (by default, missing the majority). An empty must-have list never drops,
     the JD stated no mandatory skills, so there is nothing to gate on.
     """
     if not must_have:

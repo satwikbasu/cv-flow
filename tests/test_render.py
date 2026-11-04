@@ -178,7 +178,7 @@ def test_drop_report_groups_by_bucket_in_order() -> None:
     chunks = format_drop_report(records)
     assert len(chunks) == 1
     assert chunks[0].index("too senior") < chunks[0].index("low pay")  # canonical order
-    assert "Dropped 2 — low pay" in chunks[0]
+    assert "Dropped 2: low pay" in chunks[0]
 
 
 def test_drop_report_chunks_under_telegram_limit() -> None:

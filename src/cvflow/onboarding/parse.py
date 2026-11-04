@@ -32,7 +32,7 @@ def _pdf_text(path: Path) -> str:
     if len(text.strip()) < _MIN_PDF_CHARS:
         text = "\n".join(p.extract_text() for p in reader.pages)
     if not text.strip():
-        raise ResumeParseError("no extractable text — is this a scanned PDF?")
+        raise ResumeParseError("no extractable text, is this a scanned PDF?")
     return text
 
 

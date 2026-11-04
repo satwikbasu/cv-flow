@@ -1,6 +1,6 @@
 """Declarative, config-driven exclusion rules over crux fields.
 
-A job is dropped if it matches any rule. A rule whose field is null/absent never matches —
+A job is dropped if it matches any rule. A rule whose field is null/absent never matches,
 we never drop on a fact we don't have. The operators are a small fixed set; the rules are
 config, the evaluator is code.
 """

@@ -4,7 +4,7 @@ Scraping sits behind an injectable ``search_fn`` (default: JobSpy). That seam le
 source (say a hosted jobs API) slot in without touching dedup, ranking, or storage. JobSpy is the
 only zero-cost self-hosted default.
 
-Ranking only ever reorders real postings; it never invents jobs — any job_id the ranker returns
+Ranking only ever reorders real postings; it never invents jobs, any job_id the ranker returns
 that was not a candidate is dropped.
 """
 
@@ -169,7 +169,7 @@ def normalize_rows(rows: list[dict[str, Any]]) -> list[JobPosting]:
 
 SearchFn = Callable[..., list[dict[str, Any]]]
 
-# Imported here (not at module top) because these modules import JobPosting from this package —
+# Imported here (not at module top) because these modules import JobPosting from this package,
 # JobPosting must be defined first to avoid a circular import.
 from cvflow.discovery.benchmark import (  # noqa: E402
     BenchmarkedJob,
@@ -309,7 +309,7 @@ class DiscoveryService:
                     except Exception as exc:  # noqa: BLE001
                         # Board scraping is brittle (anti-bot 403s, endpoint drift, a single
                         # unparseable posting). One failing batch must never abort the whole run
-                        # or silence the digest — log and carry on.
+                        # or silence the digest, log and carry on.
                         logger.warning(
                             "discovery search failed for term=%r location=%r: %s",
                             term, location, exc,
@@ -327,7 +327,7 @@ class DiscoveryService:
                         )
                         # Returning at all (even an empty list) means we reached Naukri's API.
                         self._naukri_reached = True
-                    except Exception as exc:  # noqa: BLE001 — Naukri must never abort the run
+                    except Exception as exc:  # noqa: BLE001 (Naukri must never abort the run)
                         logger.warning(
                             "naukri search failed for term=%r location=%r: %s",
                             term, location, exc,
@@ -337,7 +337,7 @@ class DiscoveryService:
 
     def _source_notices(self) -> list[str]:
         """Per-source health lines for the digest. Naukri attempted on every query but never
-        reached means its datacenter-IP block is active — say so instead of degrading silently."""
+        reached means its datacenter-IP block is active, say so instead of degrading silently."""
         notices: list[str] = []
         if self._naukri_enabled and self._naukri_attempted and not self._naukri_reached:
             notices.append(NAUKRI_UNREACHABLE_NOTICE)
@@ -368,7 +368,7 @@ class DiscoveryService:
                           p, f"{cap / 100_000:.1f} LPA < {self._min_ctc_lpa}")
                     continue
             # Naukri structured YOE gate (when experience_range is stated): drop only on a parsed
-            # minimum above the ceiling — an unparseable/absent range is kept.
+            # minimum above the ceiling, an unparseable/absent range is kept.
             if self._yoe_ceiling is not None and p.experience_range:
                 min_years = _parse_min_years(p.experience_range)
                 if min_years is not None and min_years > self._yoe_ceiling:
@@ -389,7 +389,7 @@ class DiscoveryService:
             return []
         jobs = {c.job_id: by_id[c.job_id] for c in cruxes}
         t = time.monotonic()
-        # Fit runs on the distillation provider (Mistral) — it enforces the json_schema array
+        # Fit runs on the distillation provider (Mistral), it enforces the json_schema array
         # shape that some hosts ignore (they emit a single object instead).
         fits = fit_scores(
             cruxes, fingerprint=self._fingerprint,
@@ -410,7 +410,7 @@ class DiscoveryService:
     def _already_seen(self, job_id: str) -> bool:
         """Cross-day dedup. Normally any job in the store is 'seen'. With
         ``reconsider_discovered``, a job that's only ever been DISCOVERED (never acted on) is
-        re-rankable — only jobs advanced past discovery stay excluded."""
+        re-rankable, only jobs advanced past discovery stay excluded."""
         if not self._store.exists(job_id):
             return False
         if self._reconsider_discovered:
@@ -450,10 +450,10 @@ class DiscoveryService:
             f"🧹 {len(candidates)} candidates after prefilter + dedup "
             f"(from {len(normalized)} unique postings)"
         )
-        # Distill ONCE over the candidate pool, then partition — salary is usually only in the JD
+        # Distill ONCE over the candidate pool, then partition, salary is usually only in the JD
         # text (JobSpy structured fields are empty), so the M/N split must use the crux-extracted
         # salary, not the pre-distill structured field. Keep gather order (not a date sort:
-        # date_posted strings are inconsistent across sources — ISO vs '2 Days Ago' — so sorting
+        # date_posted strings are inconsistent across sources, ISO vs '2 Days Ago', so sorting
         # them is meaningless). Gather order already front-loads the higher-priority search terms.
         capped = candidates[: self._max_distill_per_cohort]
         if len(candidates) > self._max_distill_per_cohort:
@@ -495,7 +495,7 @@ class DiscoveryService:
                 logger.info("exclude_when drop %s: %s", c.job_id, reason)
                 continue
             # Deterministic must-have skill gate: drop jobs whose stated mandatory skills are
-            # mostly ones the candidate lacks (a hard requirement — enforced in code, never
+            # mostly ones the candidate lacks (a hard requirement, enforced in code, never
             # delegated to the fit LLM, which over-credits incidental overlap).
             if self._candidate_skills:
                 drop, missing = coverage_drop(
@@ -516,7 +516,7 @@ class DiscoveryService:
             "cohorts after gate+partition: M (stated INR pay)=%d, N (no stated pay)=%d",
             len(m_cruxes), len(n_cruxes),
         )
-        progress(f"📊 Cohorts — 💰{len(m_cruxes)} stated-pay · 📋{len(n_cruxes)} no-pay")
+        progress(f"📊 Cohorts: 💰{len(m_cruxes)} stated-pay · 📋{len(n_cruxes)} no-pay")
         result: dict[str, Any] = {
             "M": self._rank_cohort("M", m_cruxes, by_id),
             "N": self._rank_cohort("N", n_cruxes, by_id),
@@ -531,7 +531,7 @@ class DiscoveryService:
                         date_posted=p.date_posted,
                         date_posted_parsed=parsed.isoformat() if parsed else None,
                     )
-                # Persist ranking signals (upsert every run — scores can change) and the raw JD
+                # Persist ranking signals (upsert every run, scores can change) and the raw JD
                 # text once, so tailoring works later without re-fetching a walled URL.
                 self._store.set_discovery_meta(
                     p.job_id, benchmark=bj.benchmark, fit_score=bj.fit_score,
@@ -541,7 +541,7 @@ class DiscoveryService:
                 if p.description and self._store.get_jd_text(p.job_id) is None:
                     self._store.set_jd_text(p.job_id, p.description)
         logger.info(
-            "discover total: %.1fs — presenting M=%d, N=%d (filtered: %s)",
+            "discover total: %.1fs, presenting M=%d, N=%d (filtered: %s)",
             time.monotonic() - t0, len(result["M"]), len(result["N"]), drops,
         )
         result["_dropped"] = drops  # footer-only metadata

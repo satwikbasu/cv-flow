@@ -1,7 +1,7 @@
 """Typed loading and validation of ``config.yaml``.
 
 The config holds the user's secrets and tuning (it is gitignored). This module turns it into a
-frozen, typed :class:`Config` and fails loudly — never silently — on any missing key, wrong type,
+frozen, typed :class:`Config` and fails loudly, never silently, on any missing key, wrong type,
 or malformed value.
 """
 

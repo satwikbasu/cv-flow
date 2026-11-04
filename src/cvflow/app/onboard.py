@@ -98,7 +98,7 @@ async def onboard_button(verb: str, message: Any, context: Any) -> None:
     elif verb == "replace":
         state = _state(context)
         if services.onboard is None or state is None or state.get("phase") != "confirm_replace":
-            await message.reply_text("⚠️ Nothing to replace — send /onboard again.")
+            await message.reply_text("⚠️ Nothing to replace. Send /onboard again.")
             return
         _begin(context, services, force=True)
         await message.reply_text(_ASK_FILES)
@@ -112,7 +112,7 @@ async def on_document(update: Any, context: Any) -> None:
     state = _state(context)
     phase = state["phase"] if state else None
     if phase not in ("awaiting_files", "awaiting_reply_doc"):
-        await message.reply_text("📎 I only take documents during /onboard — send /onboard first.")
+        await message.reply_text("📎 I only take documents during /onboard. Send /onboard first.")
         return
     doc = message.effective_attachment
     name = Path(getattr(doc, "file_name", None) or "upload").name
@@ -121,7 +121,7 @@ async def on_document(update: Any, context: Any) -> None:
         return
     size = getattr(doc, "file_size", None)
     if size is not None and size > _MAX_BYTES:
-        await message.reply_text("⚠️ That file is over 5 MB — send a smaller one.")
+        await message.reply_text("⚠️ That file is over 5 MB. Send a smaller one.")
         return
     if state is None:  # unreachable: phase check above implies state
         return
@@ -150,7 +150,7 @@ async def _ask_next(message: Any, services: Services, context: Any, state: dict[
         prompt = await loop.run_in_executor(
             None, runner.build_prompt, [Path(f) for f in state["files"]], state["facts"]
         )
-    except Exception as exc:  # noqa: BLE001 — must reach the user
+    except Exception as exc:  # noqa: BLE001 (must reach the user)
         context.bot_data.pop(_KEY, None)
         await message.reply_text(f"⚠️ Could not build the prompt: {exc}")
         return
@@ -180,7 +180,7 @@ async def onboard_text(message: Any, context: Any) -> None:
         if text.lower() != "done":
             await message.reply_text("Send your résumé as a document, then type done.")
         elif not state["files"]:
-            await message.reply_text("⚠️ No résumé received yet — send a document first.")
+            await message.reply_text("⚠️ No résumé received yet. Send a document first.")
         else:
             state["phase"] = "awaiting_facts"
             await _ask_next(message, services, context, state)
@@ -207,7 +207,7 @@ async def _run(
         return
     files = [Path(f) for f in state["files"]]
     async with services.onboard_lock:
-        await message.reply_text("🧩 Onboarding started — this can take a few minutes.")
+        await message.reply_text("🧩 Onboarding started, this can take a few minutes.")
         loop = asyncio.get_running_loop()
         try:
             if reply_text is None:
@@ -218,7 +218,7 @@ async def _run(
                 outcome = await loop.run_in_executor(
                     None, runner.run_manual, files, state["facts"], state["force"], reply_text
                 )
-        except Exception as exc:  # noqa: BLE001 — a failed run must reach the user
+        except Exception as exc:  # noqa: BLE001 (a failed run must reach the user)
             await message.reply_text(f"⚠️ Onboarding failed: {exc}")
             return
     for chunk in outcome.report:

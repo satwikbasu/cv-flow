@@ -1,7 +1,7 @@
 """In-process scheduling: the daily discovery run and the heartbeat.
 
 APScheduler's AsyncIOScheduler shares the bot's event loop, so the job bodies
-are coroutines that push the blocking work into the executor — exactly like
+are coroutines that push the blocking work into the executor, exactly like
 the command handlers. The daily job quietly steps aside when a manual
 /discover already holds the lock; two digests for one morning helps no one.
 """
@@ -28,7 +28,7 @@ async def scheduled_discover(services: Services, bot: Any, chat_id: int) -> None
         loop = asyncio.get_running_loop()
         try:
             outcome = await loop.run_in_executor(None, services.discover)
-        except Exception as exc:  # noqa: BLE001 — a failed daily run must reach the user
+        except Exception as exc:  # noqa: BLE001 (a failed daily run must reach the user)
             await loop.run_in_executor(
                 None, services.notify, f"⚠️ Daily discovery failed: {exc}"
             )

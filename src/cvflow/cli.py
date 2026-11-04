@@ -1,7 +1,7 @@
 """Headless entry points: ``python -m cvflow.cli discover|tailor <job_id>|heartbeat``.
 
 Reuses the exact run bodies the bot uses, so a --no-services install (or a CI
-smoke run) exercises the same code path — just with stdout instead of chat.
+smoke run) exercises the same code path, just with stdout instead of chat.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def _onboard(
         echo("Paste the model's JSON reply into a file and re-run with --reply-in that_file")
         return
     cfg = None
-    if backend is None:  # pragma: no cover — real config path; tests inject backend
+    if backend is None:  # pragma: no cover (real config path; tests inject backend)
         from cvflow.app.main import _chat_client
         from cvflow.config import load_config
 
@@ -112,7 +112,7 @@ def _onboard(
         raise SystemExit(2)
 
 
-def _frontier_provider(fr: Any) -> Any:  # pragma: no cover — real config path
+def _frontier_provider(fr: Any) -> Any:  # pragma: no cover (real config path)
     from cvflow.config import ProviderConfig
 
     # Frontier config carries no rate limit; 30 RPM is a conservative client-side cap.
@@ -141,14 +141,14 @@ def main(
             echo=echo,
         )
         return
-    if services is None:  # pragma: no cover — real config path; tests inject services
+    if services is None:  # pragma: no cover (real config path; tests inject services)
         from cvflow.app.main import build_services
         from cvflow.config import load_config
 
         services = build_services(load_config(config_path), config_path=config_path)
     from cvflow.app.commands import Services
 
-    assert isinstance(services, Services)  # noqa: S101 — narrow the injected type
+    assert isinstance(services, Services)  # noqa: S101 (narrow the injected type)
 
     command = args[0]
     if command == "discover":

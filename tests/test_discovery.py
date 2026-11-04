@@ -1,5 +1,5 @@
 """Tests for discovery: normalization, dedup, two-stage distill+benchmark, date persistence and
-the blocked-source notice. Fully mocked — no live JobSpy/network and no live LLM."""
+the blocked-source notice. Fully mocked, no live JobSpy/network and no live LLM."""
 
 import json
 import re
@@ -655,7 +655,7 @@ def test_discover_no_notice_when_naukri_reachable():
 
 
 def test_discover_no_notice_when_naukri_reachable_but_empty():
-    # Reaching Naukri and getting zero jobs is not "unreachable" — no notice.
+    # Reaching Naukri and getting zero jobs is not "unreachable", no notice.
     store = ApplicationStore(":memory:")
     svc = _two_stage_service(
         store, lambda **k: [_row("j1", site="linkedin")], throttle_seconds=0.0,
