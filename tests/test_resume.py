@@ -186,7 +186,7 @@ def test_plan_empty_picks_fall_back_to_master_order_up_to_cap() -> None:
 
 
 def test_plan_shows_fewer_when_model_picks_fewer() -> None:
-    # The model picking one (judging the rest irrelevant) shows just one — no padding.
+    # The model picking one (judging the rest irrelevant) shows just one, no padding.
     payload = json.dumps(
         {
             "section_order": ["experience", "projects", "skills"],
@@ -312,7 +312,7 @@ def test_plan_keeps_clean_reword_rejects_fabrication() -> None:
 
 
 def test_plan_is_a_single_llm_call() -> None:
-    # Ordering + selection + rewording are one request — no second call against the rate limit.
+    # Ordering + selection + rewording are one request, no second call against the rate limit.
     p = _FakeProvider(_combined_json(rewrites=["Built python flask REST APIs for tooling"]))
     ResumeTailor(p, _exp_master(), fact_corpus="rest", rephrase=True).plan(_jd())
     assert len(p.prompts) == 1
@@ -371,7 +371,7 @@ def test_assert_no_new_facts_passes_for_subset_and_fails_for_addition() -> None:
 
 
 def test_guard_allows_synonym_rewording() -> None:
-    # Numbers-only guard: rewording with no new number is allowed — including a tech word
+    # Numbers-only guard: rewording with no new number is allowed, including a tech word
     # not in the master; the human review of the diff is the backstop for that.
     t = ResumeTailor(_FakeProvider("{}"), _master())
     assert t._guard_ok("Built APIs for tooling", "Architected and shipped Kubernetes APIs")

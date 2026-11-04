@@ -2,7 +2,7 @@
 
 Every status change is routed through :mod:`cvflow.statemachine`, so an illegal move can never be
 persisted: a discovered job can only become tailored, skipped, or expired. The form-fields loader
-keeps the never-guess rule — an empty value is a known-but-unfilled field the bot must ask about,
+keeps the never-guess rule, an empty value is a known-but-unfilled field the bot must ask about,
 never invent.
 """
 
@@ -188,7 +188,7 @@ class ApplicationStore:
         )
         self._conn.commit()
         app = self.get(job_id)
-        assert app is not None  # noqa: S101 — just inserted, always present (also narrows for mypy)
+        assert app is not None  # noqa: S101 (just inserted, always present (also narrows for mypy))
         return app
 
     def get(self, job_id: str) -> Application | None:

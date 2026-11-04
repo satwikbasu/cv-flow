@@ -194,7 +194,7 @@ def resolve_tailoring_analysis(
 ) -> JDAnalysis:
     """Return the JDAnalysis that drives tailoring.
 
-    With ``use_jd_analysis=False`` (the default) it derives the analysis from the cached crux —
+    With ``use_jd_analysis=False`` (the default) it derives the analysis from the cached crux,
     no network, no LLM call, and it works on every ranked job. With ``True`` it re-analyzes the
     stored JD text (fetching the URL only if no text is stored); on any failure there it logs,
     notifies, and falls back to the crux rather than failing silently. Raises only if neither a
@@ -211,7 +211,7 @@ def resolve_tailoring_analysis(
             analysis: JDAnalysis = analyzer.analyze(text)
             store.save_analysis(job_id, analysis)
             return analysis
-        except Exception as exc:  # noqa: BLE001 — fall back to the crux, never silent
+        except Exception as exc:  # noqa: BLE001 (fall back to the crux, never silent)
             logger.warning("JD analysis failed for %s: %s; using crux", job_id, exc)
             if notify is not None:
                 notify(f"JD analysis failed for {job_id}; falling back to the cached crux.")

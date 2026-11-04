@@ -1,6 +1,6 @@
 """End-to-end tailoring: a cached crux + the master resume in, a PDF + honest diff out.
 
-This is the whole tailoring path as the bot will drive it — crux from the store,
+This is the whole tailoring path as the bot will drive it, crux from the store,
 analysis derived without any network call, one faked LLM planning call, then a
 real tectonic compile of the fixture resume. Skips when tectonic is missing.
 """

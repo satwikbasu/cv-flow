@@ -11,7 +11,7 @@ def _build_profile(tmp_path: Path) -> Path:
     prof = tmp_path / "profile"
     (prof / "projects").mkdir(parents=True)
     (prof / "skills.md").write_text("# Skills\n- Python (expert)\n")
-    (prof / "experience.md").write_text("# Experience\n## Engineer — Acme\n")
+    (prof / "experience.md").write_text("# Experience\n## Engineer, Acme\n")
     (prof / "education.md").write_text("# Education\nB.Tech\n")
     (prof / "personality.md").write_text("# Personality\nCurious.\n")
     (prof / "projects" / "foo.md").write_text("# Foo\nA project.\n")

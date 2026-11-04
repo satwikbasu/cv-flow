@@ -34,7 +34,7 @@ def _urllib_probe(base_url: str, api_key: str) -> bool:
     try:
         with urlopen(req, timeout=10) as resp:  # noqa: S310
             return bool(resp.status == 200)
-    except Exception:  # noqa: BLE001 — any failure means unreachable; the caller reports it
+    except Exception:  # noqa: BLE001 (any failure means unreachable; the caller reports it)
         return False
 
 
@@ -82,7 +82,7 @@ def run_checkup(
         missing = kb.missing_form_fields()
         if missing:
             echo(f"  INFO {len(missing)} empty form fields to fill in: {', '.join(missing)}")
-    except Exception as exc:  # noqa: BLE001 — any load failure is a reported check failure
+    except Exception as exc:  # noqa: BLE001 (any load failure is a reported check failure)
         bad(f"Knowledge base loads: {exc}", profile=True)
 
     skills_path = profile / "candidate_skills.yaml"

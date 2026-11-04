@@ -1,6 +1,6 @@
 """Naukri job search via its internal jobapi.
 
-JobSpy's Naukri scraper 406s because Naukri's search API requires ``nkparam`` — a one-time
+JobSpy's Naukri scraper 406s because Naukri's search API requires ``nkparam``, a one-time
 anti-bot token its frontend mints by RSA-encrypting a fixed plaintext with a public key embedded
 in Naukri's own JS. We reproduce that in pure Python (no browser, no proxy, no paid service).
 
@@ -134,7 +134,7 @@ def _session() -> Any:
         _SESSION.headers.update({"user-agent": _UA, "accept-language": "en-US,en;q=0.9"})
         try:
             _SESSION.get(_SEED_URL, timeout=20)
-        except Exception as exc:  # noqa: BLE001 — cookies are best-effort
+        except Exception as exc:  # noqa: BLE001 (cookies are best-effort)
             logger.warning("naukri cookie seed failed: %s", exc)
     return _SESSION
 
@@ -171,7 +171,7 @@ def search_naukri(
         except NaukriUnreachable:
             if rows:
                 break  # reached the API earlier; treat a later-page block as end-of-pages
-            raise  # first page blocked — we never reached Naukri at all
+            raise  # first page blocked, we never reached Naukri at all
         if not page_jobs:
             break
         rows.extend(_row_from_job(j) for j in page_jobs)

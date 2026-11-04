@@ -214,7 +214,7 @@ def test_store_is_usable_from_another_thread(tmp_path) -> None:
         try:
             assert s.get("j") is not None
             s.set_digest_slots(["j"])
-        except BaseException as exc:  # noqa: BLE001 — capture for the main thread
+        except BaseException as exc:  # noqa: BLE001 (capture for the main thread)
             errors.append(exc)
 
     t = threading.Thread(target=_use)

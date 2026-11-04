@@ -58,7 +58,7 @@ def test_compress_drops_examples_capped_at_samples_per_bucket() -> None:
 
 
 def test_compress_drops_capped_bucket_handled_normally() -> None:
-    # The "capped" bucket uses label "(summary)" — ensure it appears and is treated like any bucket.
+    # The "capped" bucket uses label "(summary)", ensure it appears and is treated like any bucket.
     records = [
         DropRecord("capped", "(summary)", "too many results; capped"),
         DropRecord("capped", "(summary)", "too many results; capped"),

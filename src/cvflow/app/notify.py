@@ -2,7 +2,7 @@
 
 Discovery and tailoring run in executor threads, so their progress and results
 can't go through the bot's event loop. This notifier posts ``sendMessage``
-directly with stdlib urllib — safe from any thread, chunked to Telegram's
+directly with stdlib urllib, safe from any thread, chunked to Telegram's
 message limit, and it never raises: a lost notice must not kill the run that
 sent it. Documents (the tailored PDF) are NOT sent here; those go through the
 bot object on the event loop.
@@ -61,5 +61,5 @@ class TelegramNotifier:
         for chunk in _chunks(message):
             try:
                 self._poster(self._url, {"chat_id": str(self._chat_id), "text": chunk})
-            except Exception as exc:  # noqa: BLE001 — a notice must not crash the caller
+            except Exception as exc:  # noqa: BLE001 (a notice must not crash the caller)
                 logger.warning("telegram sendMessage failed (%s); message was: %s", exc, chunk)

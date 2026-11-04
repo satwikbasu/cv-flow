@@ -64,7 +64,7 @@ def test_candidate_skills_file_is_well_formed():
     if not path.exists():
         pytest.skip("no candidate_skills.yaml configured")
     have, syn = load_skill_profile(path)
-    assert have, "candidate_skills.yaml has no skills — the must-have gate would be disabled"
+    assert have, "candidate_skills.yaml has no skills, the must-have gate would be disabled"
     # every skill is already in normalized form (lowercase, single-spaced)
     for s in have:
         assert s == normalize(s), f"skill not normalized: {s!r}"
