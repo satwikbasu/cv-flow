@@ -56,6 +56,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y bats
       - run: bats scripts/tests
 
+  secrets:
+    # Scan the full history for leaked credentials. gitleaks-action is free for
+    # personal accounts and public repositories; an org would need a license.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   preflight-rejects-old-python:
     # Ubuntu 22.04 ships Python 3.10 as the system python3. The preflight must
     # reject it with a clear message before touching apt, sudo or any download.
