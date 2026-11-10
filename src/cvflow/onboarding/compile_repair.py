@@ -98,7 +98,14 @@ def compile_with_repair(
             excerpt = _excerpt(out, root, res.stderr)
             if n == attempts:
                 break
-            _write_repairs(root, backend.repair(build_fix_prompt(_tex_files(root), excerpt)))
+            try:
+                fixes = backend.repair(build_fix_prompt(_tex_files(root), excerpt))
+            except OnboardingError as exc:
+                # e.g. a rate limit on the repair call: stop and flag rather than crash, since
+                # the profile is already in place and only the resume needs attention.
+                excerpt += f"\n\nAutomatic repair stopped: {exc}"
+                break
+            _write_repairs(root, fixes)
             repaired = True
             try:
                 parse_master(root)

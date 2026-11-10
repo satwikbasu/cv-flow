@@ -75,7 +75,8 @@ def test_run_onboard_refuses_clobber(tmp_path: Path) -> None:
     kw = {"backend": FakeBackend(_bundle()), "repo_root": repo, "user_facts": {}}
     run_onboard([_resume(tmp_path)], compile_repair=lambda *a, **k: OK, **kw)  # type: ignore[arg-type]
     out = run_onboard([_resume(tmp_path)], compile_repair=lambda *a, **k: OK, **kw)  # type: ignore[arg-type]
-    assert not out.ok and not out.flagged and "Could not apply" in out.report[0]
+    # Nothing was written, so this is a failure the CLI must report with a non-zero exit.
+    assert not out.ok and out.flagged and "Could not apply" in out.report[0]
 
 
 def test_run_onboard_flags_unverified_numbers(tmp_path: Path) -> None:
@@ -101,3 +102,19 @@ def test_run_onboard_real_compile(tmp_path: Path) -> None:
     assert out.ok, out.report
     assert out.pdf_path == repo / "data" / "resumes" / "onboarding.pdf"
     assert out.pdf_path.read_bytes().startswith(b"%PDF")
+
+
+def test_compile_step_error_is_reported_not_raised(tmp_path: Path) -> None:
+    # The profile is already written by then, so the person needs a report, not a traceback.
+    repo = _repo(_mk(tmp_path), config=True)
+
+    def broken(*a: object, **k: object) -> CompileOutcome:
+        raise OnboardingError("repair broke the resume structure")
+
+    out = run_onboard(
+        [_resume(tmp_path)], backend=FakeBackend(_bundle()), repo_root=repo, user_facts={},
+        compile_repair=broken,
+    )
+    assert out.flagged and not out.ok
+    text = "\n".join(out.report)
+    assert "repair broke the resume structure" in text and "profile" in text.lower()

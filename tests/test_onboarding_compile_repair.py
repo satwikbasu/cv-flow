@@ -93,3 +93,18 @@ def test_real_tectonic_repair(tmp_path: Path) -> None:
         root, FakeBackend({"sections/skills.tex": good}), runner=subprocess.run
     )
     assert out.ok
+
+
+def test_a_failed_repair_call_flags_instead_of_crashing(tmp_path: Path) -> None:
+    # Seen live: the repair request hit a 429 and the error escaped as a traceback.
+    from cvflow.onboarding import OnboardingError
+
+    class Failing:
+        def repair(self, prompt: str) -> dict[str, str]:
+            raise OnboardingError("repair generation failed: HTTP 429")
+
+    root = _tree(tmp_path / "resume")
+    out = compile_with_repair(root, Failing(), runner=_runner([False]))
+    assert out.flagged and not out.ok
+    flagged = (root / "ONBOARDING_FLAGGED.txt").read_text()
+    assert "Undefined control sequence" in flagged and "HTTP 429" in flagged

@@ -185,9 +185,16 @@ def run_onboard(
     try:
         applied = apply_bundle(bundle, repo_root, config_path=config_path, force=force)
     except OnboardingError as exc:
-        return OnboardOutcome([f"Could not apply the profile: {exc}"], None, False, False)
+        return OnboardOutcome([f"Could not apply the profile: {exc}"], None, True, False)
     notify("compiling resume...")
-    outcome = compile_repair(applied.resume_dir, backend, attempts=attempts)
+    try:
+        outcome = compile_repair(applied.resume_dir, backend, attempts=attempts)
+    except OnboardingError as exc:
+        return OnboardOutcome(
+            [f"Your profile was written to {applied.profile_dir}, but the resume needs "
+             f"attention: {exc}"],
+            None, True, False,
+        )
     kb = KnowledgeBase.load(applied.profile_dir, applied.profile_dir / "form_fields.json")
     flagged = outcome.flagged
     pdf_path: Path | None = None

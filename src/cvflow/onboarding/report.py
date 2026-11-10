@@ -48,6 +48,11 @@ def render_report(
     if bundle.review_notes:
         lines.append("Review notes:")
         lines += [f"- {n}" for n in bundle.review_notes]
+    if applied.ignored:
+        lines.append(
+            "Ignored these generated settings and kept your defaults (wrong type or "
+            "unknown setting): " + ", ".join(applied.ignored)
+        )
     lines.append(f"Projects wired into the resume: {len(bundle.project_docs)}")
     if compile_outcome.ok:
         lines.append(f"Resume compiled successfully (attempt {compile_outcome.attempts}).")

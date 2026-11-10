@@ -29,6 +29,40 @@ class AppliedResult:
     backup_dir: Path | None
     config_written: bool
     staged_config: Path | None
+    ignored: tuple[str, ...] = ()  # generated config keys dropped for a wrong type or name
+
+
+def _keep_weights_summing_to_one(
+    merged: dict[str, Any], base: dict[str, Any], ignored: list[str]
+) -> None:
+    """The config requires fit_weight + comp_weight == 1.0. If the generated pair breaks that
+    (often by changing only one of them), restore both from ``base`` and report it."""
+    prefs, original = merged.get("preferences") or {}, base.get("preferences") or {}
+    fit, comp = prefs.get("fit_weight"), prefs.get("comp_weight")
+    if (
+        isinstance(fit, int | float)
+        and isinstance(comp, int | float)
+        and abs(fit + comp - 1) < 1e-6
+    ):
+        return
+    for key in ("fit_weight", "comp_weight"):
+        if key in original and prefs.get(key) != original[key]:
+            prefs[key] = original[key]
+            ignored.append(f"preferences.{key}")
+
+
+def _same_shape(current: Any, value: Any) -> bool:
+    """True if ``value`` has the same kind of type as the existing setting ``current``."""
+    if isinstance(current, bool) or isinstance(value, bool):
+        return isinstance(current, bool) and isinstance(value, bool)
+    if isinstance(current, int):  # int settings reject floats when the config loads
+        return isinstance(value, int)
+    if isinstance(current, float):
+        return isinstance(value, int | float)
+    if isinstance(current, list):
+        kinds = {type(x) for x in current}
+        return isinstance(value, list) and (not kinds or all(type(x) in kinds for x in value))
+    return type(current) is type(value)
 
 
 def _write(path: Path, text: str) -> None:
@@ -138,8 +172,24 @@ def apply_bundle(
         if not base.exists():
             raise OnboardingError(f"no config to validate against: {base}")
         merged = _read_yaml(base)
-        merged["discovery"] = bundle.discovery
-        merged["preferences"] = bundle.preferences
+        # Layer the generated keys over the existing section rather than replacing it: a model
+        # often returns only the keys it personalised, and a missing required key would fail.
+        # A null means "unknown" (it must not invent a salary), so the existing value stays.
+        # A key is only taken if it already exists and keeps its type; anything else is
+        # reported and the existing value is kept, so one odd reply cannot break the config.
+        ignored: list[str] = []
+        for section, generated in (("discovery", bundle.discovery),
+                                   ("preferences", bundle.preferences)):
+            current = dict(merged.get(section) or {})
+            for key, value in generated.items():
+                if value is None:
+                    continue
+                if key in current and _same_shape(current[key], value):
+                    current[key] = value
+                else:
+                    ignored.append(f"{section}.{key}")
+            merged[section] = current
+        _keep_weights_summing_to_one(merged, _read_yaml(base), ignored)
         _write(s_config, yaml.safe_dump(merged, sort_keys=False))
         try:
             load_config(s_config)
@@ -167,9 +217,10 @@ def apply_bundle(
 
     if config_path.exists():
         live_cfg = _read_yaml(config_path)
-        live_cfg["discovery"] = bundle.discovery
-        live_cfg["preferences"] = bundle.preferences
+        # Write exactly the sections that passed validation above.
+        live_cfg["discovery"] = merged["discovery"]
+        live_cfg["preferences"] = merged["preferences"]
         config_path.write_text(yaml.safe_dump(live_cfg, sort_keys=False))
         shutil.rmtree(staging, ignore_errors=True)
-        return AppliedResult(live_profile, live_resume, backup, True, None)
-    return AppliedResult(live_profile, live_resume, backup, False, s_config)
+        return AppliedResult(live_profile, live_resume, backup, True, None, tuple(ignored))
+    return AppliedResult(live_profile, live_resume, backup, False, s_config, tuple(ignored))

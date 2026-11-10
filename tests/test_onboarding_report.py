@@ -47,3 +47,10 @@ def test_flagged_warning() -> None:
 def test_many_notes_chunked() -> None:
     chunks = _render([f"note {i} " + "x" * 200 for i in range(100)], OK)
     assert len(chunks) > 1 and all(len(c) <= 4000 for c in chunks)
+
+
+def test_ignored_generated_settings_are_reported() -> None:
+    kb = KnowledgeBase(documents={}, form_fields=FormFields({}))
+    applied = AppliedResult(Path("p"), Path("r"), None, False, None, ("discovery.locations",))
+    text = "\n".join(render_report(_bundle([]), applied, OK, kb))
+    assert "kept your defaults" in text and "discovery.locations" in text

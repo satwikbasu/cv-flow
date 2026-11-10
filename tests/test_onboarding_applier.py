@@ -75,6 +75,53 @@ def test_apply_updates_config_preserving_secrets(tmp_path: Path) -> None:
     assert cfg["discovery"]["search_terms"] == ["devops engineer"]
 
 
+def test_partial_generated_sections_keep_template_defaults(tmp_path: Path) -> None:
+    # Models often return only the keys they personalised; the rest must not vanish.
+    repo = _repo(tmp_path, config=True)
+    b = _bundle()
+    b.discovery.clear()
+    b.discovery["search_terms"] = ["platform engineer"]
+    b.preferences.clear()
+    b.preferences["prefer_roles"] = {"platform": 0.8}
+    apply_bundle(b, repo)
+    cfg: dict[str, Any] = yaml.safe_load((repo / "config.yaml").read_text())
+    example = yaml.safe_load((REPO / "config.example.yaml").read_text())
+    assert cfg["discovery"]["search_terms"] == ["platform engineer"]
+    assert cfg["discovery"]["sites"] == example["discovery"]["sites"]
+    assert cfg["preferences"]["prefer_roles"] == {"platform": 0.8}
+    assert cfg["preferences"]["exclude_when"] == example["preferences"]["exclude_when"]
+
+
+def test_generated_null_keeps_the_existing_value(tmp_path: Path) -> None:
+    # The model is told never to invent a salary, so it may answer null; keep the default.
+    repo = _repo(tmp_path, config=True)
+    b = _bundle()
+    b.preferences["min_ctc_lpa"] = None
+    apply_bundle(b, repo)
+    cfg: dict[str, Any] = yaml.safe_load((repo / "config.yaml").read_text())
+    example = yaml.safe_load((REPO / "config.example.yaml").read_text())
+    assert cfg["preferences"]["min_ctc_lpa"] == example["preferences"]["min_ctc_lpa"]
+
+
+def test_wrong_shaped_or_unknown_generated_keys_are_ignored(tmp_path: Path) -> None:
+    # Seen live: locations came back as a bare string. Keep the default and say so.
+    repo = _repo(tmp_path, config=True)
+    b = _bundle()
+    b.discovery["locations"] = "Bengaluru, India"
+    b.discovery["invented_knob"] = 3
+    b.preferences["min_ctc_lpa"] = "seven"
+    res = apply_bundle(b, repo)
+    cfg: dict[str, Any] = yaml.safe_load((repo / "config.yaml").read_text())
+    example = yaml.safe_load((REPO / "config.example.yaml").read_text())
+    assert cfg["discovery"]["locations"] == example["discovery"]["locations"]
+    assert "invented_knob" not in cfg["discovery"]
+    assert cfg["preferences"]["min_ctc_lpa"] == example["preferences"]["min_ctc_lpa"]
+    assert cfg["discovery"]["search_terms"] == ["devops engineer"]  # good keys still land
+    assert set(res.ignored) == {
+        "discovery.locations", "discovery.invented_knob", "preferences.min_ctc_lpa"
+    }
+
+
 def test_refuses_to_clobber_then_force_backs_up(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     (repo / "profile").mkdir()
@@ -91,12 +138,26 @@ def test_refuses_to_clobber_then_force_backs_up(tmp_path: Path) -> None:
 
 def test_invalid_leaves_live_tree_untouched(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    b = _bundle()
-    b.preferences["fit_weight"] = 0.9  # config validation: weights must sum to 1.0
-    b.preferences["comp_weight"] = 0.9
+    # A base config that cannot validate (bad schedule time) must stop the apply cold.
+    example = yaml.safe_load((repo / "config.example.yaml").read_text())
+    example["schedule"]["daily_discovery_time"] = "25:99"
+    (repo / "config.example.yaml").write_text(yaml.safe_dump(example))
     with pytest.raises(OnboardingError):
-        apply_bundle(b, repo)
+        apply_bundle(_bundle(), repo)
     assert not (repo / "profile").exists() and not (repo / "resume").exists()
+
+
+def test_weights_that_do_not_sum_to_one_keep_the_defaults(tmp_path: Path) -> None:
+    # Seen live: the model changed one weight only, so the pair summed to 0.5.
+    repo = _repo(tmp_path, config=True)
+    b = _bundle()
+    b.preferences["fit_weight"] = 0.2
+    res = apply_bundle(b, repo)
+    cfg: dict[str, Any] = yaml.safe_load((repo / "config.yaml").read_text())
+    example = yaml.safe_load((REPO / "config.example.yaml").read_text())
+    assert cfg["preferences"]["fit_weight"] == example["preferences"]["fit_weight"]
+    assert cfg["preferences"]["comp_weight"] == example["preferences"]["comp_weight"]
+    assert "preferences.fit_weight" in res.ignored
 
 
 def test_unsafe_slug_rejected(tmp_path: Path) -> None:
