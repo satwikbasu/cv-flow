@@ -110,7 +110,8 @@ class TwoStageBackend:
                     "candidate_skills": s2.candidate_skills.model_dump(),
                     "discovery": s2.discovery,
                     "preferences": s2.preferences,
-                    "review_notes": [*s1.review_notes, *s2.review_notes],
+                    # Stage 2 sees stage 1's output and often repeats its notes.
+                    "review_notes": list(dict.fromkeys([*s1.review_notes, *s2.review_notes])),
                 }
             )
         except ValidationError as exc:

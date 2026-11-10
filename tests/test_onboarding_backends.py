@@ -76,7 +76,7 @@ def test_two_stage_feeds_stage1_into_stage2() -> None:
     s1 = {k: d[k] for k in ("profile_docs", "project_docs", "form_fields", "resume")}
     s1["review_notes"] = ["n1"]
     s2 = {k: d[k] for k in ("candidate_skills", "discovery", "preferences")}
-    s2["review_notes"] = ["n2"]
+    s2["review_notes"] = ["n1", "n2"]  # stage 2 echoing stage 1's note is shown once
     c1, c2 = FakeClient([json.dumps(s1)]), FakeClient([json.dumps(s2)])
     bundle = TwoStageBackend(c1, c2).generate_bundle("stage1 prompt")
     assert "# skills" in c2.prompts[0]  # stage-1 output embedded
