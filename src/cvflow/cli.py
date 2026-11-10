@@ -162,7 +162,10 @@ def main(
     elif command == "tailor":
         if len(args) < 2:
             raise SystemExit("usage: python -m cvflow.cli tailor <job_id>")
-        result = services.tailor(args[1])
+        try:
+            result = services.tailor(args[1])
+        except Exception as exc:  # noqa: BLE001 (same as the bot: report it, no traceback)
+            raise SystemExit(f"Tailoring failed: {exc}") from exc
         echo(f"Tailored {result['role']} @ {result['company']}")
         echo(result["diff"])
         echo(f"PDF: {result['pdf_path']}")

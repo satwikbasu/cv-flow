@@ -102,3 +102,23 @@ def test_cli_config_env_then_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CVFLOW_CONFIG")
     main(["heartbeat"], echo=lambda _m: None)
     assert [s[1] for s in seen if s[0] == "load"] == ["alt/env.yaml", "config.yaml"]
+
+
+def test_tailor_failure_is_a_message_not_a_traceback() -> None:
+    from cvflow.app.commands import Services
+    from cvflow.llm import LLMHTTPError
+    from cvflow.storage import ApplicationStore
+
+    def boom(_job_id: str) -> dict[str, str]:
+        raise LLMHTTPError("HTTP 429: tokens per day", 429)
+
+    services = Services(
+        store=ApplicationStore(":memory:"),
+        notify=lambda _m: None,
+        discover=lambda: None,  # type: ignore[arg-type, return-value]
+        tailor=boom,
+        authorized_user_id=1,
+    )
+    with pytest.raises(SystemExit) as e:
+        main(["tailor", "linkedin:1"], services=services, echo=lambda _m: None)
+    assert str(e.value) == "Tailoring failed: HTTP 429: tokens per day"
