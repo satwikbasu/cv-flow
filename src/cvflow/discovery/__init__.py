@@ -34,6 +34,8 @@ logger = logging.getLogger("cvflow.discovery")
 
 # A job blocked by Naukri's datacenter-IP filter looks identical to "no results" unless we say so.
 NAUKRI_UNREACHABLE_NOTICE = "Naukri unreachable today"
+_BOARD_NAMES = {"linkedin": "LinkedIn", "indeed": "Indeed", "glassdoor": "Glassdoor",
+                "zip_recruiter": "ZipRecruiter"}
 
 # exclude_when crux field -> human bucket for the digest "filtered" footer.
 _EXCLUDE_BUCKET = {
@@ -202,7 +204,8 @@ def _jobspy_search(
         results_wanted=results_wanted,
         hours_old=hours_old,
         country_indeed=country_indeed,
-        linkedin_fetch_description=linkedin_fetch_description,
+        # JobSpy 1.2+ renamed this; in our boards only LinkedIn reads it, so behaviour is the same.
+        fetch_description=linkedin_fetch_description,
         enforce_annual_salary=True,
     )
     if df is None or df.empty:
@@ -288,6 +291,7 @@ class DiscoveryService:
         # Per-source health, recomputed each run (see _gather_rows / _source_notices).
         self._naukri_attempted = False
         self._naukri_reached = False
+        self._jobspy_rows_by_site: dict[str, int] = {}
 
     def _gather_rows(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -295,17 +299,21 @@ class DiscoveryService:
             for location in self._locations:
                 if self._jobspy_sites:
                     try:
-                        rows.extend(
-                            self._search_fn(
-                                site_name=self._jobspy_sites,
-                                search_term=term,
-                                location=location,
-                                results_wanted=self._results_wanted_per_site,
-                                hours_old=self._hours_old,
-                                country_indeed=self._country_indeed,
-                                linkedin_fetch_description=self._linkedin_fetch_description,
-                            )
+                        batch = self._search_fn(
+                            site_name=self._jobspy_sites,
+                            search_term=term,
+                            location=location,
+                            results_wanted=self._results_wanted_per_site,
+                            hours_old=self._hours_old,
+                            country_indeed=self._country_indeed,
+                            linkedin_fetch_description=self._linkedin_fetch_description,
                         )
+                        rows.extend(batch)
+                        for row in batch:
+                            site = str(row.get("site") or "").lower()
+                            self._jobspy_rows_by_site[site] = (
+                                self._jobspy_rows_by_site.get(site, 0) + 1
+                            )
                     except Exception as exc:  # noqa: BLE001
                         # Board scraping is brittle (anti-bot 403s, endpoint drift, a single
                         # unparseable posting). One failing batch must never abort the whole run
@@ -341,6 +349,14 @@ class DiscoveryService:
         notices: list[str] = []
         if self._naukri_enabled and self._naukri_attempted and not self._naukri_reached:
             notices.append(NAUKRI_UNREACHABLE_NOTICE)
+        # JobSpy swallows a 429 and just returns fewer rows, so the only reliable sign of a block
+        # is a requested board giving nothing across every search this run.
+        for site in self._jobspy_sites:
+            if not self._jobspy_rows_by_site.get(site.lower()):
+                name = _BOARD_NAMES.get(site.lower(), site.capitalize())
+                notices.append(
+                    f"{name} returned no jobs today (it may be rate-limiting this machine)"
+                )
         return notices
 
     def _prefilter(
@@ -424,6 +440,7 @@ class DiscoveryService:
         t0 = time.monotonic()
         self._naukri_attempted = False
         self._naukri_reached = False
+        self._jobspy_rows_by_site = {}
         today = self._today()
         drops: dict[str, int] = {}
         records: list[DropRecord] = []

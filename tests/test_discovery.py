@@ -644,6 +644,30 @@ def test_discover_surfaces_naukri_unreachable_notice():
     assert "linkedin:j1" in _all_ids(result)  # the reachable source still ranks
 
 
+def test_discover_notices_a_jobspy_board_that_returned_nothing():
+    # Seen live: LinkedIn 429'd every request, JobSpy swallowed it, and the digest said nothing.
+    store = ApplicationStore(":memory:")
+    svc = _two_stage_service(
+        store, lambda **k: [_row("i1", site="indeed")], throttle_seconds=0.0,
+        sleep=lambda s: None, locations=["Remote"], sites=["linkedin", "indeed"],
+    )
+    result = svc.discover()
+    assert result["_notices"] == [
+        "LinkedIn returned no jobs today (it may be rate-limiting this machine)"
+    ]
+    assert "indeed:i1" in _all_ids(result)  # the board that worked still ranks
+
+
+def test_discover_no_board_notice_when_every_board_returned_jobs():
+    store = ApplicationStore(":memory:")
+    svc = _two_stage_service(
+        store, lambda **k: [_row("j1", site="linkedin"), _row("i1", site="indeed")],
+        throttle_seconds=0.0, sleep=lambda s: None, locations=["Remote"],
+        sites=["linkedin", "indeed"],
+    )
+    assert svc.discover()["_notices"] == []
+
+
 def test_discover_no_notice_when_naukri_reachable():
     store = ApplicationStore(":memory:")
     svc = _two_stage_service(
@@ -670,3 +694,17 @@ def test_discover_no_notice_when_naukri_disabled():
     svc = _two_stage_service(store, lambda **k: [_row("1")], throttle_seconds=0.0,
                              sleep=lambda s: None, locations=["Remote"], sites=["linkedin"])
     assert svc.discover()["_notices"] == []
+
+
+def test_jobspy_gets_fetch_description_not_the_deprecated_name(monkeypatch):
+    # JobSpy 1.2+ renamed linkedin_fetch_description; the old name warns and goes in 2.0.
+    import jobspy
+
+    from cvflow.discovery import _jobspy_search
+
+    seen = {}
+    monkeypatch.setattr(jobspy, "scrape_jobs", lambda **kw: seen.update(kw))
+    _jobspy_search(site_name=["linkedin"], search_term="x", location="India",
+                   results_wanted=1, hours_old=24, linkedin_fetch_description=True)
+    assert seen["fetch_description"] is True
+    assert "linkedin_fetch_description" not in seen
