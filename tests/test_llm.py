@@ -62,6 +62,28 @@ def test_generate_structured_strictifies_schema_for_strict_hosts():
     assert set(inner["required"]) == set(inner["properties"])
 
 
+def test_generate_structured_uses_best_effort_for_free_form_maps():
+    from pydantic import BaseModel
+
+    class Files(BaseModel):
+        name: str
+        files: dict[str, str]  # open-ended keys: strict mode cannot express this
+
+    captured = {}
+    client = ChatClient(
+        base_url="https://api.groq.com/openai/v1",
+        api_key="k",
+        model="m",
+        max_requests_per_minute=40,
+        post_fn=_fake_post(captured),
+    )
+    client.generate_structured("go", schema=Files, max_output_tokens=64)
+    spec = captured["body"]["response_format"]["json_schema"]
+    assert spec["strict"] is False
+    # the map keeps its open value schema so the model can still fill it
+    assert spec["schema"]["properties"]["files"]["additionalProperties"] == {"type": "string"}
+
+
 def _ok_post(calls):
     def post(url, headers, body):
         calls.append(json.loads(body))
@@ -150,3 +172,70 @@ def test_malformed_reply_raises_llmerror():
     )
     with pytest.raises(LLMError):
         client.generate("x")
+
+
+def _rate_limited_then_ok(retry_after: float | None, calls: list[int]):
+    def post(url, headers, body):
+        calls.append(1)
+        if len(calls) == 1:
+            raise LLMHTTPError("HTTP 429", 429, retry_after=retry_after)
+        return json.dumps({"choices": [{"message": {"content": "ok"}}]})
+
+    return post
+
+
+def test_429_waits_for_the_hosts_retry_after():
+    # Groq's token budget resets per minute; a fixed 1s/2s backoff gives up long before that.
+    calls: list[int] = []
+    sleeps: list[float] = []
+    client = ChatClient(
+        base_url="https://api.example.com/v1", api_key="k", model="m",
+        max_requests_per_minute=40, post_fn=_rate_limited_then_ok(7.5, calls),
+        sleep=sleeps.append,
+    )
+    assert client.generate("hi") == "ok"
+    assert sleeps == [7.5]
+
+
+def test_retry_after_is_capped_so_a_bad_header_cannot_hang_a_run():
+    calls: list[int] = []
+    sleeps: list[float] = []
+    client = ChatClient(
+        base_url="https://api.example.com/v1", api_key="k", model="m",
+        max_requests_per_minute=40, post_fn=_rate_limited_then_ok(5000.0, calls),
+        sleep=sleeps.append,
+    )
+    client.generate("hi")
+    assert sleeps == [60.0]
+
+
+def test_parse_retry_after_handles_seconds_and_junk():
+    from cvflow.llm import _parse_retry_after
+
+    assert _parse_retry_after("2") == 2.0
+    assert _parse_retry_after("1.5") == 1.5
+    assert _parse_retry_after(None) is None
+    assert _parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT") is None
+
+
+def test_http_errors_keep_the_hosts_reason_and_retry_after(monkeypatch):
+    # Seen live: a distill failed with a bare "HTTP 400: Bad Request" and the cause was lost.
+    import io
+    import urllib.error
+    import urllib.request
+    from email.message import Message
+
+    from cvflow.llm import _urllib_post
+
+    headers = Message()
+    headers["retry-after"] = "6"
+    body = b'{"error":{"message":"json_validate_failed: output did not match the schema"}}'
+
+    def fake_urlopen(req, timeout=0):
+        raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", headers, io.BytesIO(body))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(LLMHTTPError) as excinfo:
+        _urllib_post("https://api.example.com/v1/chat/completions", {}, "{}")
+    assert "json_validate_failed" in str(excinfo.value)
+    assert excinfo.value.status == 400 and excinfo.value.retry_after == 6.0

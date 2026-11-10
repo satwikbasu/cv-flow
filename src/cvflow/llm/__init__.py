@@ -25,12 +25,24 @@ class RpmExceeded(LLMError):
 class LLMHTTPError(LLMError):
     """A non-200 HTTP response; ``status`` lets callers tell transient from permanent."""
 
-    def __init__(self, message: str, status: int) -> None:
+    def __init__(self, message: str, status: int, retry_after: float | None = None) -> None:
         super().__init__(message)
         self.status = status
+        self.retry_after = retry_after  # seconds the host asked us to wait, if it said
 
 
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+_MAX_RETRY_WAIT = 60.0  # never sleep longer than this on one retry, whatever the host says
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Seconds from a Retry-After header; the HTTP-date form is rare enough to ignore."""
+    if value is None:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        return None
 
 
 def _strict_json_schema(schema: Any) -> Any:
@@ -49,6 +61,22 @@ def _strict_json_schema(schema: Any) -> Any:
         for item in schema:
             _strict_json_schema(item)
     return schema
+
+
+def _has_open_object(schema: Any) -> bool:
+    """True if any object takes arbitrary keys (a ``dict[str, X]`` field).
+
+    Strict structured output cannot express those, so such schemas go out best-effort.
+    """
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" and (
+            "properties" not in schema or schema.get("additionalProperties") not in (None, False)
+        ):
+            return True
+        return any(_has_open_object(v) for v in schema.values())
+    if isinstance(schema, list):
+        return any(_has_open_object(item) for item in schema)
+    return False
 
 
 def _now_seconds() -> float:
@@ -75,7 +103,17 @@ def _urllib_post(url: str, headers: dict[str, str], body: str) -> str:
         # urlopen raises on 4xx/5xx (e.g. a missing/invalid key -> 401) before the status check
         # above. Wrap it as an LLMHTTPError so callers' ``except LLMError`` can degrade gracefully
         # and the client can retry transient statuses.
-        raise LLMHTTPError(f"POST {url} -> HTTP {exc.code}: {exc.reason}", exc.code) from exc
+        # Keep the start of the host's error body: it names the real cause (a schema mismatch,
+        # a bad parameter, which limit was hit), which "Bad Request" alone does not.
+        try:
+            detail = exc.read().decode("utf-8", errors="replace").strip()[:300]
+        except Exception:  # noqa: BLE001 (best effort; the status alone still gets raised)
+            detail = ""
+        raise LLMHTTPError(
+            f"POST {url} -> HTTP {exc.code}: {exc.reason}" + (f": {detail}" if detail else ""),
+            exc.code,
+            retry_after=_parse_retry_after(exc.headers.get("retry-after") if exc.headers else None),
+        ) from exc
     except URLError as exc:
         raise LLMError(f"POST {url} failed: {exc.reason}") from exc
 
@@ -168,7 +206,10 @@ class ChatClient:
             except LLMHTTPError as exc:
                 if exc.status not in _RETRY_STATUSES or attempt == self._max_retries:
                     raise
-                self._sleep(float(2 ** (attempt - 1)))
+                # Prefer the host's own Retry-After (Groq sends one on every 429); a per-minute
+                # token budget outlasts a short fixed backoff.
+                wait = exc.retry_after if exc.retry_after is not None else 2 ** (attempt - 1)
+                self._sleep(min(float(wait), _MAX_RETRY_WAIT))
         try:
             data = json.loads(raw)
             return str(data["choices"][0]["message"]["content"])
@@ -185,19 +226,21 @@ class ChatClient:
     ) -> str:
         """Structured-JSON generation over the OpenAI-compatible chat API.
 
-        When ``schema`` is a pydantic model, its JSON schema is sent as a strict ``json_schema``
-        response_format (Mistral/OpenAI/Cerebras enforce the exact shape); otherwise a plain
-        ``json_object`` is requested. The caller still validates with pydantic. Returns the raw
-        JSON string.
+        When ``schema`` is a pydantic model, its JSON schema is sent as a ``json_schema``
+        response_format: strict when every object is closed, best-effort when it has
+        open-ended maps that strict mode cannot express. Otherwise a plain ``json_object`` is
+        requested. The caller still validates with pydantic. Returns the raw JSON string.
         """
         response_format: dict[str, Any] = {"type": "json_object"}
         if schema is not None and hasattr(schema, "model_json_schema"):
+            raw_schema = schema.model_json_schema()
+            strict = not _has_open_object(raw_schema)
             response_format = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": schema.__name__,
-                    "strict": True,
-                    "schema": _strict_json_schema(schema.model_json_schema()),
+                    "strict": strict,
+                    "schema": _strict_json_schema(raw_schema) if strict else raw_schema,
                 },
             }
         # No top_p: temperature=0 is already greedy, and Mistral rejects top_p<1 then.
