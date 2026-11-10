@@ -48,7 +48,7 @@ _EXCLUDE_BUCKET = {
 }
 # Stable display order for the footer; only non-zero buckets are shown.
 DROP_BUCKET_ORDER = [
-    "too senior", "over-experience", "abroad", "wrong stack", "low pay",
+    "too senior", "over-experience", "abroad", "wrong stack", "low pay", "low fit",
     "night shift", "maintenance", "red flag", "other filter", "already seen", "capped",
     "distill failed",
 ]
@@ -244,6 +244,7 @@ class DiscoveryService:
         top_ctc_lpa: int = 40,
         max_distill_per_cohort: int = 60,
         top_n_per_cohort: int = 5,
+        min_fit_score: int = 0,
         distill_seed: int = 73,
         yoe_ceiling: int | None = None,
         reconsider_discovered: bool = False,
@@ -284,6 +285,7 @@ class DiscoveryService:
         self._top_ctc_lpa = top_ctc_lpa
         self._max_distill_per_cohort = max_distill_per_cohort
         self._top_n_per_cohort = top_n_per_cohort
+        self._min_fit_score = min_fit_score
         self._distill_seed = distill_seed
         self._candidate_skills = candidate_skills
         self._skill_synonyms = skill_synonyms or {}
@@ -398,7 +400,8 @@ class DiscoveryService:
         return kept
 
     def _rank_cohort(
-        self, cohort: str, cruxes: list[Crux], by_id: dict[str, JobPosting]
+        self, cohort: str, cruxes: list[Crux], by_id: dict[str, JobPosting],
+        drops: dict[str, int], records: list[DropRecord],
     ) -> list[BenchmarkedJob]:
         """Fit-score + benchmark one already-distilled, already-partitioned cohort."""
         if not cruxes:
@@ -421,6 +424,18 @@ class DiscoveryService:
             top_lpa=self._top_ctc_lpa,
             cruxes={c.job_id: c for c in cruxes},
         )
+        if cohort == "M" and self._min_fit_score > 0:
+            # The paid list ranks by value, so pay alone could lift an unrelated role to the
+            # top. Drop clear mismatches (and report them); a failed ranking call scores
+            # everything 0 under RANKING_DEGRADED, which is not a low fit.
+            kept = []
+            for bj in ranked:
+                if bj.fit_score < self._min_fit_score and "RANKING_DEGRADED" not in bj.concerns:
+                    _drop(drops, records, "low fit", bj.posting,
+                          f"fit {bj.fit_score} < {self._min_fit_score}")
+                else:
+                    kept.append(bj)
+            ranked = kept
         return ranked[: self._top_n_per_cohort]
 
     def _already_seen(self, job_id: str) -> bool:
@@ -535,8 +550,8 @@ class DiscoveryService:
         )
         progress(f"📊 Cohorts: 💰{len(m_cruxes)} stated-pay · 📋{len(n_cruxes)} no-pay")
         result: dict[str, Any] = {
-            "M": self._rank_cohort("M", m_cruxes, by_id),
-            "N": self._rank_cohort("N", n_cruxes, by_id),
+            "M": self._rank_cohort("M", m_cruxes, by_id, drops, records),
+            "N": self._rank_cohort("N", n_cruxes, by_id, drops, records),
         }
         for cohort in (result["M"], result["N"]):
             for bj in cohort:

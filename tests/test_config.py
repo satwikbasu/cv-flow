@@ -147,3 +147,11 @@ def test_example_config_parses() -> None:
     # gpt-oss on Groq accepts only low/medium/high; anything else is a 400 on every call.
     assert cfg.llm.distillation.extra_body["reasoning_effort"] in {"low", "medium", "high"}
     assert "google" not in cfg.discovery.sites
+
+
+def test_min_fit_score_defaults_to_30_and_can_be_turned_off(tmp_path: Path) -> None:
+    data = yaml.safe_load((Path(__file__).parent.parent / "config.example.yaml").read_text())
+    data["preferences"].pop("min_fit_score", None)
+    assert load_config(_write(tmp_path, data)).preferences.min_fit_score == 30
+    data["preferences"]["min_fit_score"] = 0
+    assert load_config(_write(tmp_path, data)).preferences.min_fit_score == 0

@@ -708,3 +708,57 @@ def test_jobspy_gets_fetch_description_not_the_deprecated_name(monkeypatch):
                    results_wanted=1, hours_old=24, linkedin_fetch_description=True)
     assert seen["fetch_description"] is True
     assert "linkedin_fetch_description" not in seen
+
+
+# --- fit floor for the pay-ranked section ---
+
+
+def _paid_cohort_service(store, fits, **over):
+    """Three stated-pay jobs (cohort M) plus one no-pay job (cohort N), with given fit scores."""
+    rows = [_row(i, title="Backend Engineer") for i in ("1", "2", "3", "4")]
+
+    class _Stub:
+        def generate_structured(self, prompt, *, schema, seed, max_output_tokens):
+            jid = re.search(r"job_id: (\S+)", prompt).group(1)
+            pay = None if jid == "linkedin:4" else {
+                "min_amount": 2000000, "max_amount": 2500000, "currency": "INR", "period": "year"}
+            return json.dumps({
+                "job_id": jid, "role_family": "backend", "seniority_signal": "junior",
+                "min_years_required": 1, "max_years_required": 2, "work_mode": "remote",
+                "location_text": "Remote", "country": "india", "stated_salary": pay,
+                "tech_stack": ["python"], "night_shift_only": False,
+                "app_maintenance_focus": False, "company_type": "product", "red_flags": [],
+                "applicant_instructions": None, "one_line": "x"})
+
+        def generate(self, prompt, **kw):
+            if fits is None:
+                raise RuntimeError("ranking down")
+            ids = sorted(set(re.findall(r'"job_id": "([^"]+)"', prompt)))
+            return json.dumps({"results": [{"job_id": i, "fit_score": fits[i], "fit_reason": "r",
+                                            "concern_codes": []} for i in ids]})
+
+    return _two_stage_service(store, lambda **k: rows, throttle_seconds=0.0,
+                              sleep=lambda s: None, locations=["Remote"], distiller=_Stub(),
+                              prefer_roles={"backend": 1.0}, **over)
+
+
+def test_pay_ranked_jobs_below_the_fit_floor_are_dropped_and_reported():
+    # Seen live: fit-25 and fit-20 jobs topped the paid list purely on salary.
+    fits = {"linkedin:1": 85, "linkedin:2": 25, "linkedin:3": 20, "linkedin:4": 10}
+    result = _paid_cohort_service(ApplicationStore(":memory:"), fits, min_fit_score=30).discover()
+    assert [j.posting.job_id for j in result["M"]] == ["linkedin:1"]
+    assert [j.posting.job_id for j in result["N"]] == ["linkedin:4"]  # fit-ranked list untouched
+    assert result["_dropped"].get("low fit") == 2
+    assert {r.bucket for r in result["_drop_records"]} >= {"low fit"}
+
+
+def test_fit_floor_is_off_by_default():
+    fits = {"linkedin:1": 85, "linkedin:2": 25, "linkedin:3": 20, "linkedin:4": 10}
+    result = _paid_cohort_service(ApplicationStore(":memory:"), fits).discover()
+    assert len(result["M"]) == 3
+
+
+def test_fit_floor_never_empties_the_list_when_ranking_failed():
+    # A failed ranking call scores everything 0 (RANKING_DEGRADED); that is not "low fit".
+    result = _paid_cohort_service(ApplicationStore(":memory:"), None, min_fit_score=30).discover()
+    assert len(result["M"]) == 3 and "low fit" not in result["_dropped"]

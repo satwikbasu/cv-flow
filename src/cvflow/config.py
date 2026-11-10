@@ -65,6 +65,7 @@ class PreferencesConfig:
     comp_weight: float
     prefer_roles: dict[str, float]
     exclude_when: list[dict[str, Any]]
+    min_fit_score: int = 30  # paid-list jobs below this fit are dropped; 0 turns it off
 
 
 @dataclass(frozen=True)
@@ -361,6 +362,7 @@ def load_config(path: str | Path) -> Config:
             ),
             yoe_buffer=_get_int(pref, "yoe_buffer", "preferences."),
             top_ctc_lpa=_get_int(pref, "top_ctc_lpa", "preferences."),
+            min_fit_score=_opt_int(pref, "min_fit_score", "preferences.", 30),
             fit_weight=fit_w,
             comp_weight=comp_w,
             prefer_roles=_get_role_map(pref, "prefer_roles", "preferences."),

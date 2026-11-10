@@ -139,6 +139,7 @@ def build_services(config: Config, config_path: str = "config.yaml") -> Services
         fit_weight=config.preferences.fit_weight,
         comp_weight=config.preferences.comp_weight,
         top_ctc_lpa=config.preferences.top_ctc_lpa,
+        min_fit_score=config.preferences.min_fit_score,
         max_distill_per_cohort=config.discovery.max_distill_per_cohort,
         top_n_per_cohort=config.discovery.top_n_per_cohort,
         yoe_ceiling=config.preferences.yoe_have + config.preferences.yoe_buffer,

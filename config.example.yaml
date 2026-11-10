@@ -34,6 +34,8 @@ preferences:
   exclude_title_keywords: ["senior", "sr.", "principal", "manager", "director", "vp"]
   fit_weight: 0.70                     # fit_weight + comp_weight must sum to 1.0
   comp_weight: 0.30
+  min_fit_score: 30                    # the paid list ranks by pay; drop jobs whose fit is below
+                                       # this (fit under 30 means an unrelated role). 0 = off
   prefer_roles:                        # weight each role family 0.0-1.0; higher surfaces sooner
     devops: 0.9
     backend: 0.9
