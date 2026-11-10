@@ -18,11 +18,21 @@ from collections.abc import Iterable
 from cvflow.onboarding.bundle import ResumeBundle
 
 _NUM_RE = re.compile(r"\d[\d,]*")
+# TeX layout values such as 0.15in, -5pt or 0.97\textwidth. They size the page and are never
+# facts about the candidate, so they are removed from the generated LaTeX before checking.
+_TEX_LENGTH_RE = re.compile(
+    r"-?\d*\.?\d+\s*(?:(?:pt|in|em|ex|cm|mm|bp|pc|sp|dd|cc|mu)\b"
+    r"|\\(?:textwidth|linewidth|columnwidth|textheight|paperwidth|baselineskip))"
+)
 
 
 def _numbers(text: str) -> set[str]:
     """Digit-runs with commas stripped, so '10,000' and '10000' compare equal."""
     return {m.replace(",", "") for m in _NUM_RE.findall(text)}
+
+
+def _latex_numbers(tex: str) -> set[str]:
+    return _numbers(_TEX_LENGTH_RE.sub(" ", tex))
 
 
 def unverified_numbers(resume: ResumeBundle, sources: Iterable[str]) -> list[str]:
@@ -31,9 +41,9 @@ def unverified_numbers(resume: ResumeBundle, sources: Iterable[str]) -> list[str
     ``sources`` is the uploaded resume text plus the user's own answers. An empty
     result means every number traces back to something the person actually gave us.
     """
-    generated = _numbers(resume.heading_tex)
+    generated = _latex_numbers(resume.heading_tex)
     for block in (*resume.sections.values(), *resume.project_blocks.values()):
-        generated |= _numbers(block)
+        generated |= _latex_numbers(block)
     allowed: set[str] = set()
     for src in sources:
         allowed |= _numbers(src)

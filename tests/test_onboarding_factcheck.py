@@ -32,3 +32,17 @@ def test_no_numbers_means_nothing_to_flag() -> None:
 def test_commas_and_scale_are_normalized() -> None:
     r = _resume(sections={"exp": "Served 10,000 users"})
     assert unverified_numbers(r, ["10000 MAU"]) == []
+
+
+def test_latex_layout_lengths_are_not_facts() -> None:
+    # Seen live: the model wrapped a section in [leftmargin=0.15in], flagging "0" and "15".
+    r = _resume(sections={
+        "skills": r"\begin{itemize}[leftmargin=0.15in, label={}]\vspace{-5pt}"
+                  r"\begin{tabular*}{0.97\textwidth}{l}Python\end{tabular*}",
+    })
+    assert unverified_numbers(r, []) == []
+
+
+def test_a_real_metric_beside_layout_is_still_flagged() -> None:
+    r = _resume(sections={"exp": r"\vspace{-2pt}\resumeItem{Served 3M requests a day}"})
+    assert unverified_numbers(r, []) == ["3"]
