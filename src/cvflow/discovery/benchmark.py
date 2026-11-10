@@ -171,7 +171,7 @@ _FIT_PREAMBLE = (
 )
 
 # Strict JSON-schema for the fit batch, some hosts ignore schemas and emit a single object, so
-# fit runs on the distillation provider (Mistral), which enforces this exactly.
+# fit runs on the distillation provider, which enforces this exactly.
 _FIT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -275,7 +275,7 @@ def fit_scores(
         f"## Candidate\n{fingerprint}\n\n## Jobs\n{jobs_json}\n"
     )
     try:
-        # json_schema (not top_p / json_object): Mistral enforces the exact array shape;
+        # json_schema (not top_p / json_object): strict hosts enforce the exact array shape;
         # top_p is omitted because temperature=0 is already greedy (Mistral rejects top_p<1).
         raw = provider.generate(
             prompt, temperature=0, seed=FIT_SEED,

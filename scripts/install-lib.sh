@@ -150,7 +150,7 @@ inject_config() {
     : > "$out"
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line//PASTE_YOUR_BOT_TOKEN/"$bot_token"}"
-        line="${line//PASTE_YOUR_MISTRAL_KEY/"$llm_key"}"
+        line="${line//PASTE_YOUR_GROQ_KEY/"$llm_key"}"
         if [ -n "${user_id}" ]; then
             line="${line//authorized_user_id: 0/authorized_user_id: "$user_id"}"
         fi

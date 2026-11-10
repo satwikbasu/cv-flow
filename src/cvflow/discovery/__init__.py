@@ -389,7 +389,7 @@ class DiscoveryService:
             return []
         jobs = {c.job_id: by_id[c.job_id] for c in cruxes}
         t = time.monotonic()
-        # Fit runs on the distillation provider (Mistral), it enforces the json_schema array
+        # Fit runs on the distillation provider, which enforces the json_schema array
         # shape that some hosts ignore (they emit a single object instead).
         fits = fit_scores(
             cruxes, fingerprint=self._fingerprint,

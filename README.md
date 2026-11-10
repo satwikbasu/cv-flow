@@ -29,10 +29,10 @@ scraped, so you may hit rate limits or a temporary block, and heavy use can run 
 terms of service. The defaults keep the volume modest; leave them there unless you know what you
 are doing.
 
-It runs on free LLM tiers, Mistral by default. Free tiers usually let the provider train on what
-you send them, and the bot sends your profile and the job text. Use a provider you are comfortable
-with, and point it at a paid endpoint if you would rather your data not be used that way; any
-OpenAI-compatible API works.
+It runs on Groq's free plan by default. The bot sends your profile and the job text to that
+provider, so read its data policy and pick one you are comfortable with; any OpenAI-compatible API
+works, paid or local. Free plans also cap usage. Groq's is roughly 200K tokens a day, which covers a
+normal daily run but not a much larger search, and these limits change without notice.
 
 The defaults are built for the Indian market: salary floors in lakhs per annum, Naukri as a board,
 India and Remote as the locations, and Asia/Kolkata as the timezone. It works elsewhere, but you

@@ -18,7 +18,10 @@ discovery:
   hours_old: 48
   country_indeed: "india"
   linkedin_fetch_description: true
-  max_distill_per_cohort: 200          # jobs distilled and ranked per run; higher = more coverage, slower
+  # New jobs distilled and ranked per run (already-seen jobs are cached and cost nothing).
+  # Each one costs about 3K tokens, so 30 is ~90K of Groq's free 200K tokens/day and takes
+  # about 12 minutes at its 8K tokens/min cap. Raise it only on a paid or bigger plan.
+  max_distill_per_cohort: 30
   top_n_per_cohort: 5                  # jobs shown per section in the digest
   reconsider_discovered: false         # keep false in normal use
   retention_days: 21                   # untailored jobs older than this drop off the backlog (expire)
@@ -50,37 +53,34 @@ preferences:
     - {field: country, equals: "other"}
     - {field: red_flags, contains_any: ["unpaid", "commission_only", "scam"]}
 
-# Any OpenAI-compatible endpoint works: set base_url / api_key / model to point at Mistral,
-# OpenRouter (https://openrouter.ai/api/v1), Cerebras (https://api.cerebras.ai/v1), or a local
-# server. `provider` is just a label that selects the seed field name
+# Any OpenAI-compatible endpoint works: set base_url / api_key / model to point at Groq,
+# OpenRouter (https://openrouter.ai/api/v1), a paid Mistral key (https://api.mistral.ai/v1), or
+# a local server. `provider` is just a label that selects the seed field name
 # (mistral -> random_seed, anything else -> seed).
 # `extra_body` passes arbitrary extra JSON to the chat API (e.g. OpenRouter routing params).
+#
+# The default is Groq's free plan (no card needed), one key for both roles. Its limits for
+# gpt-oss-120b are 30 requests/min, 1000/day, 8K tokens/min and 200K tokens/day, so keep
+# discovery volume modest; the token budget runs out before the request count does.
 llm:
-  # Distillation + fit ranking. Mistral's free tier handles the strict JSON-array shape these need.
+  # Distillation + fit ranking. These need strict JSON, which gpt-oss-120b on Groq supports.
   distillation:
-    provider: "mistral"
-    api_key: "PASTE_YOUR_MISTRAL_KEY"
-    base_url: "https://api.mistral.ai/v1"
-    model: "mistral-small-2603"
-    max_requests_per_minute: 60
-    # Mistral Small 4 is a reasoning model; this keeps structured JSON output unwrapped.
-    extra_body: {reasoning_effort: "none"}
-  # Resume tailoring. Defaults to Mistral so the zero-cost default needs only one key.
+    provider: "groq"
+    api_key: "PASTE_YOUR_GROQ_KEY"
+    base_url: "https://api.groq.com/openai/v1"
+    model: "openai/gpt-oss-120b"
+    max_requests_per_minute: 30
+    # gpt-oss is a reasoning model; low effort leaves the token budget for the answer.
+    # Groq accepts only low, medium or high for this model.
+    extra_body: {reasoning_effort: "low"}
+  # Resume tailoring. Same key and model by default.
   tailoring:
-    provider: "mistral"
-    api_key: "PASTE_YOUR_MISTRAL_KEY"
-    base_url: "https://api.mistral.ai/v1"
-    model: "mistral-small-2603"
-    max_requests_per_minute: 60
-    # Mistral Small 4 is a reasoning model; this keeps structured JSON output unwrapped.
-    extra_body: {reasoning_effort: "none"}
-  # Optional alternative (Cerebras has no perpetual free tier, so it is not the default):
-  # tailoring:
-  #   provider: "cerebras"
-  #   api_key: "PASTE_YOUR_CEREBRAS_KEY"
-  #   base_url: "https://api.cerebras.ai/v1"
-  #   model: "gpt-oss-120b"
-  #   max_requests_per_minute: 5
+    provider: "groq"
+    api_key: "PASTE_YOUR_GROQ_KEY"
+    base_url: "https://api.groq.com/openai/v1"
+    model: "openai/gpt-oss-120b"
+    max_requests_per_minute: 30
+    extra_body: {reasoning_effort: "low"}
 
 resume:
   master_tex_path: "resume/master.tex"

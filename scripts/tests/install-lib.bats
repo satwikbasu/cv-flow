@@ -70,9 +70,9 @@ telegram:
   bot_token: "PASTE_YOUR_BOT_TOKEN"
 llm:
   distillation:
-    api_key: "PASTE_YOUR_MISTRAL_KEY"
+    api_key: "PASTE_YOUR_GROQ_KEY"
   tailoring:
-    api_key: "PASTE_YOUR_MISTRAL_KEY"
+    api_key: "PASTE_YOUR_GROQ_KEY"
 EOF
     inject_config "${example}" "${out}" "123:abc" "sk-test-key"
     grep -q 'bot_token: "123:abc"' "${out}"
@@ -220,7 +220,7 @@ EOF
 #!/usr/bin/env bash
 printf '200'
 EOF
-    PATH="${STUBDIR}:${PATH}" validate_llm_key "https://api.mistral.ai/v1" "good-key"
+    PATH="${STUBDIR}:${PATH}" validate_llm_key "https://api.groq.com/openai/v1" "good-key"
 }
 
 @test "validate_llm_key rejects http 401 with code 1" {
@@ -228,7 +228,7 @@ EOF
 #!/usr/bin/env bash
 printf '401'
 EOF
-    run env PATH="${STUBDIR}:${PATH}" bash -c '. "'"${LIB}"'"; validate_llm_key https://api.mistral.ai/v1 bad'
+    run env PATH="${STUBDIR}:${PATH}" bash -c '. "'"${LIB}"'"; validate_llm_key https://api.groq.com/openai/v1 bad'
     [ "${status}" -eq 1 ]
 }
 
@@ -237,7 +237,7 @@ EOF
 #!/usr/bin/env bash
 printf '000'
 EOF
-    run env PATH="${STUBDIR}:${PATH}" bash -c '. "'"${LIB}"'"; validate_llm_key https://api.mistral.ai/v1 key'
+    run env PATH="${STUBDIR}:${PATH}" bash -c '. "'"${LIB}"'"; validate_llm_key https://api.groq.com/openai/v1 key'
     [ "${status}" -eq 2 ]
 }
 

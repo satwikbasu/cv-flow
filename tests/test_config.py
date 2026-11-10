@@ -142,6 +142,8 @@ def test_extra_body_parsed_and_validated(tmp_path: Path) -> None:
 
 def test_example_config_parses() -> None:
     cfg = load_config(Path(__file__).parent.parent / "config.example.yaml")
-    assert cfg.llm.distillation.model == "mistral-small-2603"
-    assert cfg.llm.tailoring.provider == "mistral"
+    assert cfg.llm.distillation.model == "openai/gpt-oss-120b"
+    assert cfg.llm.tailoring.provider == "groq"
+    # gpt-oss on Groq accepts only low/medium/high; anything else is a 400 on every call.
+    assert cfg.llm.distillation.extra_body["reasoning_effort"] in {"low", "medium", "high"}
     assert "google" not in cfg.discovery.sites

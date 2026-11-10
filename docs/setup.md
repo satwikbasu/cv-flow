@@ -7,7 +7,7 @@ spent getting a couple of API keys.
 
 - An Ubuntu 24.04 machine you control, x86_64 or arm64. A small cloud VM is plenty.
 - A Telegram account.
-- A Mistral API key. The free tier is enough for everyday use.
+- A Groq API key. The free plan is enough for everyday use and needs no card.
 
 ## Get your keys first
 
@@ -20,8 +20,8 @@ your bot.
 **Your numeric Telegram user id.** Message [@userinfobot](https://t.me/userinfobot) and it replies
 with your id, a number like `87654321`. The bot will only talk to this id and ignore everyone else.
 
-**A Mistral API key.** Sign up at [console.mistral.ai](https://console.mistral.ai), create an API
-key, and copy it. The default config uses Mistral for both ranking and resume tailoring, so one
+**A Groq API key.** Sign up at [console.groq.com](https://console.groq.com), open **API Keys**,
+create one, and copy it. The default config uses Groq for both ranking and resume tailoring, so one
 key is all you need to start.
 
 ## Run the installer
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/satwikbasu/cv-flow/main/scripts/boo
 ```
 
 This clones the latest release into `~/cv-flow`, sets up a Python virtual environment, installs the
-Tectonic LaTeX compiler, and then asks you for the three values above. It checks the Mistral key
+Tectonic LaTeX compiler, and then asks you for the three values above. It checks the Groq key
 against the API as you type it, so a wrong paste gets caught right away. When it finishes it runs a
 quick self-check so you can see everything is wired up.
 

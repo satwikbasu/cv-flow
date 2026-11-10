@@ -24,7 +24,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=scripts/install-lib.sh
 . "${SCRIPT_DIR}/install-lib.sh"
 
-LLM_BASE_URL="https://api.mistral.ai/v1"
+LLM_BASE_URL="https://api.groq.com/openai/v1"
 VENV_DIR="${REPO_ROOT}/.venv"
 LOCAL_BIN="${HOME}/.local/bin"
 
@@ -296,11 +296,11 @@ write_config() {
     local token key user_id
     if [ "${FLAG_NONINTERACTIVE}" = "1" ]; then
         token="$(trim_value "${CVFLOW_BOT_TOKEN:-PASTE_YOUR_BOT_TOKEN}")"
-        key="$(trim_value "${CVFLOW_LLM_KEY:-PASTE_YOUR_MISTRAL_KEY}")"
+        key="$(trim_value "${CVFLOW_LLM_KEY:-PASTE_YOUR_GROQ_KEY}")"
         user_id="$(trim_value "${CVFLOW_USER_ID:-}")"
         case "${user_id}" in ''|*[!0-9]*) user_id="" ;; esac
         write_config_file "${example}" "${cfg}" "${token}" "${key}" "${user_id}"
-        if [ "${token}" = "PASTE_YOUR_BOT_TOKEN" ] || [ "${key}" = "PASTE_YOUR_MISTRAL_KEY" ]; then
+        if [ "${token}" = "PASTE_YOUR_BOT_TOKEN" ] || [ "${key}" = "PASTE_YOUR_GROQ_KEY" ]; then
             log_warn "config.yaml written with placeholders; edit it before running the bot"
         else
             log_ok "config.yaml written from environment values"
@@ -361,7 +361,7 @@ prompt_for_llm_key() {
     local key attempts=0 rc
     while [ "${attempts}" -lt 5 ]; do
         attempts=$((attempts + 1))
-        key="$(prompt_secret 'Mistral API key: ')" || return 1
+        key="$(prompt_secret 'Groq API key (from console.groq.com): ')" || return 1
         key="$(trim_value "${key}")"
         if [ -z "${key}" ]; then
             log_err "empty value; try again" >/dev/tty
@@ -372,10 +372,10 @@ prompt_for_llm_key() {
         fi
         rc=0; validate_llm_key "${LLM_BASE_URL}" "${key}" || rc=$?
         case "${rc}" in
-            0) log_ok "Mistral key accepted" >/dev/tty; printf '%s' "${key}"; return 0 ;;
-            2) log_warn "couldn't reach Mistral to validate; check your network"
+            0) log_ok "Groq key accepted" >/dev/tty; printf '%s' "${key}"; return 0 ;;
+            2) log_warn "couldn't reach Groq to validate; check your network"
                if confirm_continue_unvalidated; then printf '%s' "${key}"; return 0; fi ;;
-            *) log_err "Mistral rejected that key; try again" >/dev/tty ;;
+            *) log_err "Groq rejected that key; try again" >/dev/tty ;;
         esac
     done
     log_err "giving up after 5 attempts; re-run once you have a working key" >/dev/tty

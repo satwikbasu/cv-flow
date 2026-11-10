@@ -1,7 +1,7 @@
 """Distil one JD into a structured, enum-heavy Crux.
 
-Engine: any OpenAI-compatible provider with ``generate_structured`` (default: Mistral
-``mistral-small``, fast, high throughput, strict JSON). The distiller is told never to infer
+Engine: any OpenAI-compatible provider with ``generate_structured`` (default: Groq
+``gpt-oss-120b``, strict JSON). The distiller is told never to infer
 salary or years of experience, absent facts become null/"unknown".
 """
 
