@@ -28,12 +28,19 @@ __all__ = [
     "DiscoveryService",
     "normalize_rows",
     "DropRecord",
+    "LLM_LIMIT_NOTICE",
 ]
 
 logger = logging.getLogger("cvflow.discovery")
 
 # A job blocked by Naukri's datacenter-IP filter looks identical to "no results" unless we say so.
 NAUKRI_UNREACHABLE_NOTICE = "Naukri unreachable today"
+# A 429 from the LLM (e.g. Groq's free daily token budget) otherwise only shows as "fit 0".
+LLM_LIMIT_NOTICE = (
+    "The AI provider's usage limit was reached during this run, so some jobs were skipped "
+    "or shown unranked. Skipped jobs are tried again next run (Groq's free plan refills its "
+    "daily token budget over 24 hours)."
+)
 # Pay that only exists as a cut of sales is commission-only, whatever the model called it.
 _COMMISSION_ONLY_RE = re.compile(r"\brevenue[\s-]*shar(?:e|ing)\b|\bcommission[\s-]*only\b", re.I)
 _BOARD_NAMES = {"linkedin": "LinkedIn", "indeed": "Indeed", "glassdoor": "Glassdoor",
@@ -296,6 +303,7 @@ class DiscoveryService:
         self._naukri_attempted = False
         self._naukri_reached = False
         self._jobspy_rows_by_site: dict[str, int] = {}
+        self._llm_limited = False
 
     def _gather_rows(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -347,12 +355,18 @@ class DiscoveryService:
                 self._sleep(self._throttle_seconds)
         return rows
 
+    def _note_llm_error(self, exc: Exception) -> None:
+        if getattr(exc, "status", None) == 429:
+            self._llm_limited = True
+
     def _source_notices(self) -> list[str]:
         """Per-source health lines for the digest. Naukri attempted on every query but never
         reached means its datacenter-IP block is active, say so instead of degrading silently."""
         notices: list[str] = []
         if self._naukri_enabled and self._naukri_attempted and not self._naukri_reached:
             notices.append(NAUKRI_UNREACHABLE_NOTICE)
+        if self._llm_limited:
+            notices.append(LLM_LIMIT_NOTICE)
         # JobSpy swallows a 429 and just returns fewer rows, so the only reliable sign of a block
         # is a requested board giving nothing across every search this run.
         for site in self._jobspy_sites:
@@ -415,6 +429,7 @@ class DiscoveryService:
         fits = fit_scores(
             cruxes, fingerprint=self._fingerprint,
             prefer_roles=self._prefer_roles, provider=self._distiller_provider,
+            on_error=self._note_llm_error,
         )
         logger.info(
             "cohort %s: fit-scored %d cruxes in %.1fs (1 call)",
@@ -458,6 +473,7 @@ class DiscoveryService:
         self._naukri_attempted = False
         self._naukri_reached = False
         self._jobspy_rows_by_site = {}
+        self._llm_limited = False
         today = self._today()
         drops: dict[str, int] = {}
         records: list[DropRecord] = []
@@ -506,12 +522,12 @@ class DiscoveryService:
         by_id = {p.job_id: p for p in capped}
         distiller = Distiller(self._distiller_provider, seed=self._distill_seed)
         t = time.monotonic()
-        cruxes = distill_all(
-            capped, self._store, distiller,
-            on_failure=lambda p, exc: _drop(
-                drops, records, "distill failed", p, f"{type(exc).__name__}: {exc}"
-            ),
-        )
+
+        def _distill_failed(p: JobPosting, exc: Exception) -> None:
+            self._note_llm_error(exc)
+            _drop(drops, records, "distill failed", p, f"{type(exc).__name__}: {exc}")
+
+        cruxes = distill_all(capped, self._store, distiller, on_failure=_distill_failed)
         distill_secs = time.monotonic() - t
         logger.info(
             "stage distill: %d/%d jobs in %.1fs", len(cruxes), len(capped), distill_secs

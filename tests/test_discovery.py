@@ -5,8 +5,9 @@ import json
 import re
 from datetime import date
 
-from cvflow.discovery import DiscoveryService, normalize_rows
+from cvflow.discovery import LLM_LIMIT_NOTICE, DiscoveryService, normalize_rows
 from cvflow.discovery.naukri import NaukriUnreachable
+from cvflow.llm import LLMHTTPError
 from cvflow.statemachine import Status
 from cvflow.storage import ApplicationStore
 
@@ -789,3 +790,37 @@ def test_revenue_share_wording_is_ignored_without_a_commission_rule():
     svc = _two_stage_service(ApplicationStore(":memory:"), lambda **k: rows,
                              throttle_seconds=0.0, sleep=lambda s: None, locations=["Remote"])
     assert _all_ids(svc.discover()) == {"linkedin:1"}  # no rule, no change in behaviour
+
+
+# --- LLM limit notice ---
+
+
+class _LimitedStub(_StubMistral):
+    """Distills the first job, then the provider's daily budget runs out (seen live on Groq)."""
+
+    def generate_structured(self, prompt, **kw):
+        if self.calls >= 1:
+            raise LLMHTTPError("HTTP 429: tokens per day (TPD)", 429)
+        return super().generate_structured(prompt, **kw)
+
+    def generate(self, prompt, **kw):
+        raise LLMHTTPError("HTTP 429: tokens per day (TPD)", 429)
+
+
+def test_discover_notices_when_the_llm_limit_is_hit():
+    store = ApplicationStore(":memory:")
+    svc = _two_stage_service(
+        store, lambda **k: [_row("1"), _row("2")], locations=["Remote"], sites=["linkedin"],
+        distiller=_LimitedStub(),
+    )
+    result = svc.discover()
+    assert result["_notices"] == [LLM_LIMIT_NOTICE]
+    assert "linkedin:1" in _all_ids(result)  # what was read is still shown, unranked
+
+
+def test_discover_no_llm_notice_on_a_normal_run():
+    store = ApplicationStore(":memory:")
+    svc = _two_stage_service(
+        store, lambda **k: [_row("1")], locations=["Remote"], sites=["linkedin"]
+    )
+    assert svc.discover()["_notices"] == []

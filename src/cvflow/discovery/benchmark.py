@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -261,8 +262,10 @@ def fit_scores(
     fingerprint: str,
     prefer_roles: dict[str, float],
     provider: _Provider,
+    on_error: Callable[[Exception], None] | None = None,
 ) -> dict[str, FitResult]:
-    """One ranking call over all cruxes. On failure, every job degrades to fit 0 plus a flag."""
+    """One ranking call over all cruxes. On failure, every job degrades to fit 0 plus a flag,
+    and the error goes to ``on_error`` so the caller can tell the user why."""
     if not cruxes:
         return {}
     ids = {c.job_id for c in cruxes}
@@ -287,6 +290,8 @@ def fit_scores(
         )
     except Exception as exc:  # noqa: BLE001 (degrade, never lose the cohort)
         logger.warning("fit scoring call failed (%s); degrading cohort to fit 0", exc)
+        if on_error is not None:
+            on_error(exc)
         return {jid: FitResult(0, "(ranking unavailable)", ["RANKING_DEGRADED"]) for jid in ids}
     # response_format=json_object may wrap the array in an object; accept either, and salvage
     # individual objects if the model emits slightly-malformed JSON (missing commas, a truncated
