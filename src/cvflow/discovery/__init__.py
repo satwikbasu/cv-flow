@@ -34,6 +34,8 @@ logger = logging.getLogger("cvflow.discovery")
 
 # A job blocked by Naukri's datacenter-IP filter looks identical to "no results" unless we say so.
 NAUKRI_UNREACHABLE_NOTICE = "Naukri unreachable today"
+# Pay that only exists as a cut of sales is commission-only, whatever the model called it.
+_COMMISSION_ONLY_RE = re.compile(r"\brevenue[\s-]*shar(?:e|ing)\b|\bcommission[\s-]*only\b", re.I)
 _BOARD_NAMES = {"linkedin": "LinkedIn", "indeed": "Indeed", "glassdoor": "Glassdoor",
                 "zip_recruiter": "ZipRecruiter"}
 
@@ -519,6 +521,10 @@ class DiscoveryService:
         n_cruxes: list[Crux] = []
         for c in cruxes:
             p = by_id[c.job_id]
+            if "commission_only" not in c.red_flags and _COMMISSION_ONLY_RE.search(
+                f"{p.title}\n{p.description}"
+            ):
+                c = c.model_copy(update={"red_flags": [*c.red_flags, "commission_only"]})
             excluded, reason = crux_excluded(c.model_dump(), self._exclude_when)
             if excluded:
                 field = reason.split()[0] if reason else ""

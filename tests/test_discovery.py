@@ -762,3 +762,30 @@ def test_fit_floor_never_empties_the_list_when_ranking_failed():
     # A failed ranking call scores everything 0 (RANKING_DEGRADED); that is not "low fit".
     result = _paid_cohort_service(ApplicationStore(":memory:"), None, min_fit_score=30).discover()
     assert len(result["M"]) == 3 and "low fit" not in result["_dropped"]
+
+
+# --- revenue-share postings count as commission-only ---
+
+_COMMISSION_RULE = [{"field": "red_flags", "contains_any": ["commission_only"]}]
+
+
+def test_revenue_share_posting_is_treated_as_commission_only():
+    # Seen live: "Technology Consultant (Freelance - Revenue share model)" ranked #2 on pay.
+    rows = [
+        _row("1", title="Technology Consultant (Freelance - Revenue share model)"),
+        _row("2", title="Backend Engineer", description="Earn on a commission-only basis."),
+        _row("3", title="Backend Engineer", description="Base salary plus commission."),
+    ]
+    svc = _two_stage_service(ApplicationStore(":memory:"), lambda **k: rows,
+                             throttle_seconds=0.0, sleep=lambda s: None, locations=["Remote"],
+                             exclude_when=_COMMISSION_RULE)
+    result = svc.discover()
+    assert _all_ids(result) == {"linkedin:3"}  # a normal salary with commission stays
+    assert result["_dropped"].get("red flag") == 2
+
+
+def test_revenue_share_wording_is_ignored_without_a_commission_rule():
+    rows = [_row("1", title="Consultant (Revenue share model)")]
+    svc = _two_stage_service(ApplicationStore(":memory:"), lambda **k: rows,
+                             throttle_seconds=0.0, sleep=lambda s: None, locations=["Remote"])
+    assert _all_ids(svc.discover()) == {"linkedin:1"}  # no rule, no change in behaviour
