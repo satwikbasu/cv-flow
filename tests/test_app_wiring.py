@@ -11,7 +11,7 @@ from telegram.ext import CallbackQueryHandler, MessageHandler
 from cvflow import cli
 from cvflow.app.bot import build_application
 from cvflow.app.commands import Services
-from cvflow.app.main import build_services
+from cvflow.app.main import NotOnboardedError, build_services
 from cvflow.app.notify import TelegramNotifier
 from cvflow.config import load_config
 from cvflow.runs import DiscoverOutcome
@@ -121,6 +121,21 @@ def test_build_services_composes_without_touching_the_network(tmp_path: Path) ->
     assert isinstance(services.notify, TelegramNotifier)
     assert callable(services.discover) and callable(services.tailor)
     assert services.authorized_user_id == 123
+
+
+def test_build_services_raises_not_onboarded_when_profile_missing(tmp_path: Path) -> None:
+    cfg = _config_file(tmp_path)
+    (tmp_path / "profile" / "form_fields.json").unlink()  # never onboarded
+    with pytest.raises(NotOnboardedError):
+        build_services(load_config(cfg))
+
+
+def test_cli_without_onboarding_exits_with_a_clear_message(tmp_path: Path) -> None:
+    cfg = _config_file(tmp_path)
+    (tmp_path / "profile" / "form_fields.json").unlink()
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--config", str(cfg), "discover"], echo=lambda _m: None)
+    assert "onboard" in str(excinfo.value).lower()
 
 
 # --- cli ---

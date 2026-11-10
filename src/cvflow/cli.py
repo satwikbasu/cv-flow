@@ -142,10 +142,13 @@ def main(
         )
         return
     if services is None:  # pragma: no cover (real config path; tests inject services)
-        from cvflow.app.main import build_services
+        from cvflow.app.main import NotOnboardedError, build_services
         from cvflow.config import load_config
 
-        services = build_services(load_config(config_path), config_path=config_path)
+        try:
+            services = build_services(load_config(config_path), config_path=config_path)
+        except NotOnboardedError as exc:
+            raise SystemExit(str(exc)) from exc
     from cvflow.app.commands import Services
 
     assert isinstance(services, Services)  # noqa: S101 (narrow the injected type)

@@ -31,7 +31,19 @@ from cvflow.resume import ResumeTailor, parse_master
 from cvflow.runs import DiscoverOutcome, OnboardOutcome, run_discover, run_onboard, run_tailor
 from cvflow.storage import ApplicationStore
 
-__all__ = ["build_services", "main"]
+__all__ = ["NotOnboardedError", "build_services", "main"]
+
+
+class NotOnboardedError(RuntimeError):
+    """Raised when the bot is started before a profile and resume exist."""
+
+    MESSAGE = (
+        "cv-flow is not onboarded yet. Run `cvflow onboard <your-resume>` first, "
+        "or send /onboard to the bot."
+    )
+
+    def __init__(self, message: str = MESSAGE) -> None:
+        super().__init__(message)
 
 
 def _chat_client(cfg: ProviderConfig) -> ChatClient:
@@ -97,9 +109,12 @@ class OnboardRunner:
 
 def build_services(config: Config, config_path: str = "config.yaml") -> Services:
     store = ApplicationStore(config.storage.db_path)
-    knowledge = KnowledgeBase.load(
-        config.profile.knowledge_base_dir, config.storage.form_fields_path
-    )
+    try:
+        knowledge = KnowledgeBase.load(
+            config.profile.knowledge_base_dir, config.storage.form_fields_path
+        )
+    except FileNotFoundError as exc:
+        raise NotOnboardedError() from exc
     distiller = _chat_client(config.llm.distillation)
     tailoring_client = _chat_client(config.llm.tailoring)
     skills_yaml = Path(config.profile.knowledge_base_dir) / "candidate_skills.yaml"
@@ -202,7 +217,10 @@ def _frontier_provider(fr: Any) -> ProviderConfig:
 def main() -> None:  # pragma: no cover (the composition is tested; polling is not)
     config_path = os.environ.get("CVFLOW_CONFIG", "config.yaml")
     config = load_config(config_path)
-    services = build_services(config, config_path=config_path)
+    try:
+        services = build_services(config, config_path=config_path)
+    except NotOnboardedError as exc:
+        raise SystemExit(str(exc)) from exc
 
     async def _start_scheduler(app: Any) -> None:
         build_scheduler(
