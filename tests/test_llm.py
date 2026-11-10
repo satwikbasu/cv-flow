@@ -34,6 +34,34 @@ def test_generate_posts_chat_completions_and_returns_content():
     assert captured["body"]["messages"] == [{"role": "user", "content": "rank these"}]
 
 
+def test_generate_structured_strictifies_schema_for_strict_hosts():
+    from pydantic import BaseModel
+
+    class Inner(BaseModel):
+        amount: int | None = None
+
+    class Outer(BaseModel):
+        name: str
+        inner: Inner
+
+    captured = {}
+    client = ChatClient(
+        base_url="https://api.groq.com/openai/v1",
+        api_key="k",
+        model="m",
+        max_requests_per_minute=40,
+        post_fn=_fake_post(captured),
+    )
+    client.generate_structured("go", schema=Outer, max_output_tokens=64)
+    sent = captured["body"]["response_format"]["json_schema"]["schema"]
+    # Groq's strict mode needs every object to forbid extras and require all its properties.
+    assert sent["additionalProperties"] is False
+    assert set(sent["required"]) == set(sent["properties"])
+    inner = sent["$defs"]["Inner"]
+    assert inner["additionalProperties"] is False
+    assert set(inner["required"]) == set(inner["properties"])
+
+
 def _ok_post(calls):
     def post(url, headers, body):
         calls.append(json.loads(body))

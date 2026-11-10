@@ -33,6 +33,24 @@ class LLMHTTPError(LLMError):
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
+def _strict_json_schema(schema: Any) -> Any:
+    """Make a JSON schema satisfy strict structured-output hosts (Groq rejects anything else).
+
+    Every object must forbid extra properties and list all of them as required; pydantic emits
+    neither by default. Walks nested objects, ``$defs``, arrays and unions in place.
+    """
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" and "properties" in schema:
+            schema["additionalProperties"] = False
+            schema["required"] = list(schema["properties"])
+        for value in schema.values():
+            _strict_json_schema(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            _strict_json_schema(item)
+    return schema
+
+
 def _now_seconds() -> float:
     return time.monotonic()
 
@@ -179,7 +197,7 @@ class ChatClient:
                 "json_schema": {
                     "name": schema.__name__,
                     "strict": True,
-                    "schema": schema.model_json_schema(),
+                    "schema": _strict_json_schema(schema.model_json_schema()),
                 },
             }
         # No top_p: temperature=0 is already greedy, and Mistral rejects top_p<1 then.
