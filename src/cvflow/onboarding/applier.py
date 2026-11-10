@@ -93,13 +93,28 @@ def _stage_profile(bundle: CandidateBundle, root: Path) -> None:
     )
 
 
+def _with_projects_section(sections: dict[str, str], blocks: dict[str, str]) -> dict[str, str]:
+    """Add the empty "projects" slot when the model sent project blocks but forgot it.
+
+    It goes right after experience (the usual place), or last if there is none.
+    """
+    if not blocks or "projects" in sections:
+        return dict(sections)
+    out: dict[str, str] = {}
+    for name, body in sections.items():
+        out[name] = body
+        if name == "experience":
+            out["projects"] = ""
+    out.setdefault("projects", "")
+    return out
+
+
 def _stage_resume(bundle: CandidateBundle, repo_root: Path, root: Path) -> None:
     res = bundle.resume
-    names = list(res.sections)
+    sections = _with_projects_section(res.sections, res.project_blocks)
+    names = list(sections)
     _check_names("section", names)
     _check_names("project", list(res.project_blocks))
-    if res.project_blocks and "projects" not in res.sections:
-        raise OnboardingError("project_blocks given but resume.sections has no 'projects' key")
     template_path = repo_root / "resume.template" / "master.tex"
     if not template_path.exists():
         raise OnboardingError(f"resume template not found: {template_path}")
@@ -110,10 +125,10 @@ def _stage_resume(bundle: CandidateBundle, repo_root: Path, root: Path) -> None:
     inputs = "\n".join(f"\\input{{sections/{n}.tex}}" for n in names)
     master = template.replace("%__HEADING__", res.heading_tex).replace("%__SECTIONS__", inputs)
     _write(root / "master.tex", master)
-    for name, body in res.sections.items():
+    for name, body in sections.items():
         if name != "projects":
             _write(root / "sections" / f"{name}.tex", body)
-    if "projects" in res.sections:
+    if "projects" in sections:
         lines = ["\\section{Projects}", "\\resumeSubHeadingListStart"]
         lines += [f"  \\input{{sections/projects/{s}.tex}}" for s in res.project_blocks]
         lines.append("\\resumeSubHeadingListEnd")

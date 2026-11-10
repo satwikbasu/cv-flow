@@ -174,3 +174,17 @@ def test_assembled_master_compiles(tmp_path: Path) -> None:
     apply_bundle(_bundle(), repo)
     tailor = ResumeTailor(None, parse_master(repo / "resume"))  # type: ignore[arg-type]
     assert tailor.compile_master(tmp_path / "out").exists()
+
+
+def test_projects_section_added_when_model_forgets_it(tmp_path: Path) -> None:
+    # Models sometimes send project blocks but drop the empty "projects" key.
+    data = _bundle().model_dump()
+    data["resume"]["sections"] = {
+        "experience": "\\section{Experience}\n",
+        "skills": "\\section{Skills}\nPython, Go\n",
+    }
+    repo = _repo(tmp_path)
+    apply_bundle(CandidateBundle.model_validate(data), repo)
+    master = parse_master(repo / "resume")
+    assert master.section_order == ["experience", "projects", "skills"]
+    assert [p.project_id for p in master.projects] == ["alpha", "beta"]

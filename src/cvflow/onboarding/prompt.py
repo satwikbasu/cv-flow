@@ -28,6 +28,8 @@ _RULES = r"""RULES
    appear, but leave its body "" (the projects file is assembled from project_blocks).
    Each project_blocks[slug] is ONE \resumeProjectHeading{..}{..} block with \resumeItem
    bullets. project_blocks slugs MUST equal project_docs slugs (lowercase-hyphen).
+   If the resume lists no projects, leave project_blocks and project_docs empty and omit
+   the "projects" key; do not turn job duties into projects.
 4. candidate_skills.skills must mirror the skills stated in the resume. synonyms map common
    aliases (e.g. "k8s") to a canonical skill that IS in skills.
 5. discovery and preferences are config blocks. preferences.prefer_roles keys MUST come from
