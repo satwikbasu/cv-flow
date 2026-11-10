@@ -226,3 +226,13 @@ def test_fit_view_includes_must_have_skills_in_prompt():
     assert "terraform" in captured["prompt"]
     assert "HARD GATE" not in _FIT_PREAMBLE  # the cap-at-40 directive is gone
     assert out["indeed:1"].concerns == ["STACK_MISMATCH"]
+
+
+def test_unknown_salary_currency_counts_as_unknown_pay():
+    from types import SimpleNamespace
+
+    from cvflow.discovery.benchmark import crux_salary_lpa
+    from cvflow.discovery.distill import Salary
+
+    s = Salary(min_amount=600000, max_amount=900000, currency=None, period="year")
+    assert crux_salary_lpa(SimpleNamespace(stated_salary=s)) is None  # never guess INR

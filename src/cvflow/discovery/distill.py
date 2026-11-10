@@ -28,7 +28,7 @@ DISTILL_VERSION = "4"
 class Salary(BaseModel):
     min_amount: float | None
     max_amount: float | None
-    currency: str
+    currency: str | None  # null when the JD states an amount but no currency
     period: Literal["year", "month", "hour", "unknown"]
 
 

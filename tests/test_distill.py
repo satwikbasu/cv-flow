@@ -87,3 +87,16 @@ def test_distill_all_reports_failed_jd_and_continues():
     )
     assert [c.job_id for c in out] == ["indeed:1"]
     assert failures == [("bad", "boom")]
+
+
+def test_salary_without_a_stated_currency_is_allowed():
+    # Seen live: a Naukri JD gave an amount but no currency; the strict schema demanded a
+    # string, so Groq rejected the reply and the job was dropped as "distill failed".
+    from cvflow.discovery.distill import Salary
+    from cvflow.llm import _strict_json_schema
+
+    s = Salary.model_validate({"min_amount": 600000, "max_amount": 900000,
+                               "currency": None, "period": "year"})
+    assert s.currency is None
+    spec = _strict_json_schema(Salary.model_json_schema())["properties"]["currency"]
+    assert {"type": "null"} in spec.get("anyOf", []) or "null" in spec.get("type", [])
