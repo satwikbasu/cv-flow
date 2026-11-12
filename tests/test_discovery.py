@@ -824,3 +824,21 @@ def test_discover_no_llm_notice_on_a_normal_run():
         store, lambda **k: [_row("1")], locations=["Remote"], sites=["linkedin"]
     )
     assert svc.discover()["_notices"] == []
+
+
+def test_distill_cap_shares_slots_across_searches():
+    # Seen live: with a cap of 30, the first search term filled every slot and the
+    # backend/python/golang searches were never read. Each search now gets a turn.
+    store = ApplicationStore(":memory:")
+
+    def search(*, search_term, **k):
+        tag = search_term.replace(" ", "")
+        return [_row(f"{tag}{i}") for i in range(5)]
+
+    svc = _two_stage_service(
+        store, search, search_terms=["devops", "backend"], locations=["Remote"],
+        sites=["linkedin"], max_distill_per_cohort=4, sleep=lambda s: None,
+    )
+    ids = _all_ids(svc.discover())
+    assert ids == {"linkedin:devops0", "linkedin:backend0", "linkedin:devops1",
+                   "linkedin:backend1"}

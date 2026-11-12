@@ -145,6 +145,15 @@ def _parse_min_years(text: str | None) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _interleave(batches: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Round-robin over the batches, keeping each batch's own order."""
+    out: list[dict[str, Any]] = []
+    longest = max((len(b) for b in batches), default=0)
+    for i in range(longest):
+        out.extend(b[i] for b in batches if i < len(b))
+    return out
+
+
 def normalize_rows(rows: list[dict[str, Any]]) -> list[JobPosting]:
     """Convert raw search rows to deduplicated :class:`JobPosting` objects."""
     out: list[JobPosting] = []
@@ -306,7 +315,9 @@ class DiscoveryService:
         self._llm_limited = False
 
     def _gather_rows(self) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+        # One batch per (search, board). The batches are interleaved at the end so a small
+        # distill cap is shared across every search instead of going to the first term only.
+        batches: list[list[dict[str, Any]]] = []
         for term in self._search_terms:
             for location in self._locations:
                 if self._jobspy_sites:
@@ -320,12 +331,14 @@ class DiscoveryService:
                             country_indeed=self._country_indeed,
                             linkedin_fetch_description=self._linkedin_fetch_description,
                         )
-                        rows.extend(batch)
+                        by_site: dict[str, list[dict[str, Any]]] = {}
                         for row in batch:
                             site = str(row.get("site") or "").lower()
+                            by_site.setdefault(site, []).append(row)
                             self._jobspy_rows_by_site[site] = (
                                 self._jobspy_rows_by_site.get(site, 0) + 1
                             )
+                        batches.extend(by_site.values())
                     except Exception as exc:  # noqa: BLE001
                         # Board scraping is brittle (anti-bot 403s, endpoint drift, a single
                         # unparseable posting). One failing batch must never abort the whole run
@@ -337,7 +350,7 @@ class DiscoveryService:
                 if self._naukri_enabled:
                     self._naukri_attempted = True
                     try:
-                        rows.extend(
+                        batches.append(
                             self._naukri_search_fn(
                                 search_term=term,
                                 location=location,
@@ -353,7 +366,7 @@ class DiscoveryService:
                             term, location, exc,
                         )
                 self._sleep(self._throttle_seconds)
-        return rows
+        return _interleave(batches)
 
     def _note_llm_error(self, exc: Exception) -> None:
         if getattr(exc, "status", None) == 429:
@@ -504,7 +517,8 @@ class DiscoveryService:
         # text (JobSpy structured fields are empty), so the M/N split must use the crux-extracted
         # salary, not the pre-distill structured field. Keep gather order (not a date sort:
         # date_posted strings are inconsistent across sources, ISO vs '2 Days Ago', so sorting
-        # them is meaningless). Gather order already front-loads the higher-priority search terms.
+        # them is meaningless). Gather order takes one job from each search in turn, so every
+        # search term gets a share of the cap.
         capped = candidates[: self._max_distill_per_cohort]
         if len(candidates) > self._max_distill_per_cohort:
             overflow = len(candidates) - self._max_distill_per_cohort
