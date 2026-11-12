@@ -236,3 +236,22 @@ def test_unknown_salary_currency_counts_as_unknown_pay():
 
     s = Salary(min_amount=600000, max_amount=900000, currency=None, period="year")
     assert crux_salary_lpa(SimpleNamespace(stated_salary=s)) is None  # never guess INR
+
+
+def test_no_yoe_unknown_when_the_board_states_experience():
+    # Seen live: a Naukri "0 to 1 years" job was flagged YOE_UNKNOWN because the model left
+    # min_years_required empty, though the board's own experience field said it.
+    from dataclasses import replace
+
+    from cvflow.discovery.distill import Crux
+    crux = Crux(job_id="a", role_family="backend", seniority_signal="junior",
+                min_years_required=None, max_years_required=None, work_mode="onsite",
+                location_text="Noida", country="india", stated_salary=None, tech_stack=[],
+                night_shift_only=False, app_maintenance_focus=False, company_type="product",
+                red_flags=[], applicant_instructions=None, one_line="x")
+    fits = {"a": FitResult(90, "ok", [])}
+    for rng, flagged in (("0-1 Yrs", False), ("", True), ("Not disclosed", True)):
+        jobs = {"a": replace(_job("a"), experience_range=rng or None)}
+        out = benchmark_cohort(jobs, fits, cohort="N", fit_weight=0.70, comp_weight=0.30,
+                               min_lpa=7, top_lpa=40, cruxes={"a": crux})
+        assert ("YOE_UNKNOWN" in out[0].concerns) is flagged, rng

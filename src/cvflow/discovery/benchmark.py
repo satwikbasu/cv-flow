@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from cvflow.discovery import JobPosting
+from cvflow.discovery import JobPosting, _parse_min_years
 
 logger = logging.getLogger("cvflow.discovery.benchmark")
 
@@ -108,7 +108,8 @@ def benchmark_cohort(
     """Score and sort one cohort. M blends fit+comp; N is fit only.
 
     Adds code-side deterministic concerns the LLM never emits: PAY_UNKNOWN when there's no stated
-    INR salary, YOE_UNKNOWN when the crux didn't state a minimum experience (never fabricate).
+    INR salary, YOE_UNKNOWN when neither the crux nor the board states a minimum experience
+    (never fabricate).
     """
     cruxes = cruxes or {}
     out: list[BenchmarkedJob] = []
@@ -124,7 +125,9 @@ def benchmark_cohort(
         crux = cruxes.get(job_id)
         for code, applies in (
             ("PAY_UNKNOWN", lpa is None),
-            ("YOE_UNKNOWN", crux is not None and crux.min_years_required is None),
+            # The board's own experience field counts too (Naukri states it on most jobs).
+            ("YOE_UNKNOWN", crux is not None and crux.min_years_required is None
+             and _parse_min_years(posting.experience_range) is None),
         ):
             if applies and code not in concerns:
                 concerns.append(code)
