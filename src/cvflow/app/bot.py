@@ -8,16 +8,34 @@ error.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from telegram.error import NetworkError
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters
 
 from cvflow.app.buttons import on_button
 from cvflow.app.commands import Services, on_text
 from cvflow.app.onboard import on_document
 
-__all__ = ["build_application"]
+__all__ = ["build_application", "on_error"]
+
+logger = logging.getLogger("cvflow.bot")
+
+
+async def on_error(update: object, context: Any) -> None:
+    """Log errors the handlers did not catch.
+
+    A dropped connection or DNS blip makes polling fail every few seconds until the network
+    is back; the library retries on its own, so one warning line each is enough. Anything
+    else keeps its full traceback.
+    """
+    err = context.error
+    if isinstance(err, NetworkError):
+        logger.warning("Telegram network error (will retry): %s", err)
+    else:
+        logger.error("unhandled error", exc_info=err)
 
 
 def build_application(
@@ -34,4 +52,5 @@ def build_application(
     application.add_handler(MessageHandler(filters.TEXT | filters.COMMAND, on_text))
     application.add_handler(MessageHandler(filters.Document.ALL, on_document))
     application.add_handler(CallbackQueryHandler(on_button))
+    application.add_error_handler(on_error)
     return application
