@@ -203,3 +203,17 @@ def test_summarize_drops_strips_whitespace_and_truncates() -> None:
     assert result is not None
     assert len(result) <= 200
     assert not result.startswith(" ")
+
+
+def test_summarize_drops_cut_ends_on_a_sentence_or_word() -> None:
+    # Seen live: a hard cut left "... such as Azure Integration Developer @ Skill Quotient Te".
+    records = [_rec("low pay", "Job A @ Acme")]
+    two = "First sentence is here. Second one runs on and on past the limit"
+    result = summarize_drops(records, provider=_FakeProvider(two), max_chars=40,
+                             samples_per_bucket=3)
+    assert result == "First sentence is here."
+    one = "One long sentence with no full stop that runs past the limit"
+    result = summarize_drops(records, provider=_FakeProvider(one), max_chars=30,
+                             samples_per_bucket=3)
+    assert result == "One long sentence with no…"
+    assert len(result) <= 30

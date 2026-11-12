@@ -77,6 +77,18 @@ def compress_drops(records: list[DropRecord], samples_per_bucket: int) -> str:
     return "\n".join(lines)
 
 
+def _fit(text: str, max_chars: int) -> str:
+    """Shorten to max_chars at the last full sentence, else at a word with an ellipsis."""
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+    if end > 0:
+        return cut[: end + 1]
+    space = cut[: max_chars - 1].rfind(" ")
+    return (cut[:space] if space > 0 else cut[: max_chars - 1]).rstrip(" ,;:") + "…"
+
+
 def summarize_drops(
     records: list[DropRecord],
     *,
@@ -117,7 +129,7 @@ def summarize_drops(
         logger.warning("drop summary failed (%s); falling back to footer", exc)
         return None
 
-    summary = raw.strip()[:max_chars]
+    summary = _fit(raw.strip(), max_chars)
     if not summary:
         logger.warning("drop summary provider returned empty text; falling back to footer")
         return None
