@@ -93,6 +93,13 @@ class FrontierBackend(SingleShotBackend):
     """Single-shot generation over a bring-your-own frontier client."""
 
 
+_STAGE1_SCOPE = (
+    "\n\nTHIS STAGE: return only profile_docs, project_docs, form_fields, resume and "
+    "review_notes. candidate_skills, discovery and preferences are produced by a later stage "
+    "from your output, so leave them out and do not mention them in review_notes.\n"
+)
+
+
 class TwoStageBackend:
     """Stage 1 writes the facts; stage 2 derives skills/config from stage 1's output."""
 
@@ -101,7 +108,7 @@ class TwoStageBackend:
         self._s2 = stage2_client
 
     def generate_bundle(self, prompt: str) -> CandidateBundle:
-        s1 = _structured(self._s1, prompt, _Stage1)
+        s1 = _structured(self._s1, prompt + _STAGE1_SCOPE, _Stage1)
         s2 = _structured(self._s2, build_stage2_prompt(s1.model_dump_json(indent=1)), _Stage2)
         try:
             return CandidateBundle.model_validate(

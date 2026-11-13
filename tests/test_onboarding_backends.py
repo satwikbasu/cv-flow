@@ -80,6 +80,9 @@ def test_two_stage_feeds_stage1_into_stage2() -> None:
     c1, c2 = FakeClient([json.dumps(s1)]), FakeClient([json.dumps(s2)])
     bundle = TwoStageBackend(c1, c2).generate_bundle("stage1 prompt")
     assert "# skills" in c2.prompts[0]  # stage-1 output embedded
+    # Stage 1 is told the later-stage keys are not its job, so it doesn't flag them missing.
+    assert c1.prompts[0].startswith("stage1 prompt")
+    assert "later stage" in c1.prompts[0] and "discovery" in c1.prompts[0]
     assert bundle.review_notes == ["n1", "n2"]
     assert bundle.candidate_skills.skills == ["Kubernetes"]
 
