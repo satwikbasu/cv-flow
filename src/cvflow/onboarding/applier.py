@@ -93,6 +93,21 @@ def _stage_profile(bundle: CandidateBundle, root: Path) -> None:
     )
 
 
+def _normalize_section_names(sections: dict[str, str]) -> dict[str, str]:
+    """Turn display titles the model may use as keys ("Technical Skills") into file names."""
+    out: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for name, body in sections.items():
+        key = re.sub(r"\s+", "_", name.strip()).lower()
+        if key in seen:
+            raise OnboardingError(
+                f"resume sections {seen[key]!r} and {name!r} map to the same file {key!r}"
+            )
+        seen[key] = name
+        out[key] = body
+    return out
+
+
 def _with_projects_section(sections: dict[str, str], blocks: dict[str, str]) -> dict[str, str]:
     """Add the empty "projects" slot when the model sent project blocks but forgot it.
 
@@ -111,7 +126,7 @@ def _with_projects_section(sections: dict[str, str], blocks: dict[str, str]) -> 
 
 def _stage_resume(bundle: CandidateBundle, repo_root: Path, root: Path) -> None:
     res = bundle.resume
-    sections = _with_projects_section(res.sections, res.project_blocks)
+    sections = _with_projects_section(_normalize_section_names(res.sections), res.project_blocks)
     names = list(sections)
     _check_names("section", names)
     _check_names("project", list(res.project_blocks))

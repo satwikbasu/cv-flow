@@ -188,3 +188,25 @@ def test_projects_section_added_when_model_forgets_it(tmp_path: Path) -> None:
     master = parse_master(repo / "resume")
     assert master.section_order == ["experience", "projects", "skills"]
     assert [p.project_id for p in master.projects] == ["alpha", "beta"]
+
+
+def test_section_titles_used_as_keys_are_normalized(tmp_path: Path) -> None:
+    # Models sometimes key sections by their display title ("Technical Skills").
+    data = _bundle().model_dump()
+    data["resume"]["sections"] = {
+        "Experience": "\\section{Experience}\n",
+        "Projects": "",
+        "Technical Skills": "\\section{Technical Skills}\nPython, Go\n",
+    }
+    repo = _repo(tmp_path)
+    apply_bundle(CandidateBundle.model_validate(data), repo)
+    master = parse_master(repo / "resume")
+    assert master.section_order == ["experience", "projects", "technical_skills"]
+    assert [p.project_id for p in master.projects] == ["alpha", "beta"]
+
+
+def test_section_names_that_collide_after_normalizing_are_rejected(tmp_path: Path) -> None:
+    data = _bundle().model_dump()
+    data["resume"]["sections"] = {"Skills": "a", "skills": "b", "projects": ""}
+    with pytest.raises(OnboardingError, match="same file"):
+        apply_bundle(CandidateBundle.model_validate(data), _repo(tmp_path))

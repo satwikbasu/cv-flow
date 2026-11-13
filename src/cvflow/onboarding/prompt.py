@@ -24,7 +24,8 @@ _RULES = r"""RULES
       \resumeItem{What was built}
       \resumeItemListEnd
 3. resume.sections is an ORDERED map of section name -> LaTeX body (e.g. experience,
-   education, projects, skills). INCLUDE a "projects" key positioned where projects should
+   education, projects, skills). Keys are lowercase file names like "skills"; the display
+   title goes in the body's \section{..}. INCLUDE a "projects" key positioned where projects should
    appear, but leave its body "" (the projects file is assembled from project_blocks).
    Each project_blocks[slug] is ONE \resumeProjectHeading{..}{..} block with \resumeItem
    bullets. project_blocks slugs MUST equal project_docs slugs (lowercase-hyphen).
