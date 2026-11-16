@@ -21,7 +21,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -43,7 +43,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck scripts/*.sh
@@ -51,7 +51,7 @@ jobs:
   bats:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install bats
         run: sudo apt-get update && sudo apt-get install -y bats
       - run: bats scripts/tests
@@ -61,7 +61,7 @@ jobs:
     # personal accounts and public repositories; an org would need a license.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
@@ -73,7 +73,7 @@ jobs:
     # reject it with a clear message before touching apt, sudo or any download.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Installer refuses Python 3.10
         run: |
           if python3 -c 'import sys; raise SystemExit(sys.version_info >= (3, 11))'; then
@@ -108,7 +108,7 @@ jobs:
           apt-get install -y git sudo ca-certificates python3
           useradd -m -s /bin/bash cvflow
           echo "cvflow ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/cvflow
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Hand the workspace to the non-root user
         run: chown -R cvflow:cvflow .
       - name: First install run
