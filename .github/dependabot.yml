@@ -4,6 +4,7 @@ updates:
   # These arrive as PRs to review; bump the pins deliberately after the suite passes.
   - package-ecosystem: "pip"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -17,6 +18,7 @@ updates:
   # GitHub Actions used by the CI workflow.
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
